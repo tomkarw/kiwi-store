@@ -5,7 +5,7 @@
 //!
 //! Nothing fancy, but should allow you to [KvStore::set], [KvStore::get] and [KvStore::remove]
 //! in a in-memory cache.
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 use std::path::{PathBuf};
 use std::{result, io, fmt, error, fs};
@@ -20,11 +20,17 @@ use std::fmt::Display;
 // TODO(tkarwowski): might use https://docs.rs/fehler/1.0.0/fehler/ instead
 pub type Result<T> = result::Result<T, Error>;
 
+/// Errors possible, [`NoKey`] is KvStore specific,
+/// the rest is simply propagated from lower functions
 #[derive(Debug)]
 pub enum Error {
+    /// Error when trying to remove non-existing key
     NoKey(String),
+    /// Error when Seek fails due to file corruption
     Offset(String),
+    /// Error when any of the IO operation fails
     Io(io::Error),
+    /// Error when deserialization failed due to file corruption
     InvalidData(serde_json::Error),
 }
 
