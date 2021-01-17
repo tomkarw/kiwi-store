@@ -5,10 +5,10 @@
 //!
 //! Nothing fancy, but should allow you to [KvStore::set], [KvStore::get] and [KvStore::remove]
 //! in a in-memory cache.
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
 use std::path::{PathBuf};
-use std::{result, io, fmt, error};
+use std::{result, io, fmt, error, fs};
 use std::fs::{File, OpenOptions};
 use std::io::{Write, BufReader, BufRead, Seek, SeekFrom};
 use serde::{Serialize, Deserialize};
@@ -87,13 +87,13 @@ pub struct KvStore {
 impl KvStore {
     /// Open KvStore at a specified location.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
-        let full_path: PathBuf = [path.into(), PathBuf::from("kvs.db")]
-            .iter()
-            .collect();
+
+        let mut full_path = path.into();
+        full_path.push("kvs.db");
 
         let mut store = HashMap::new();
         if full_path.exists() {
-            let mut file = File::open(&full_path)?;
+            let file = File::open(&full_path)?;
             let mut reader = BufReader::new(file);
             let mut buffer = String::new();
             let mut current_offset = 0;
@@ -126,8 +126,8 @@ impl KvStore {
         Ok(KvStore { write_log, full_path, store })
     }
 
-    fn value(&self, offset: u64) -> Result<String> {
-        let mut file = File::open(&self.full_path)?;
+    fn value(path: &PathBuf, offset: u64) -> Result<String> {
+        let mut file = File::open(path)?;
 
         file.seek(SeekFrom::Start(offset))?;
         let mut reader = BufReader::new(&file);
@@ -139,9 +139,51 @@ impl KvStore {
         }
     }
 
+    fn compact(&mut self) -> Result<()> {
+        // open new file kvs.db.tmp
+        let path = self.full_path.clone();
+        let tmp_path = self.full_path.clone().with_extension(".tmp");
+
+        let mut new_log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&tmp_path)?;
+        let mut new_offset = 0u64;
+
+
+        // for each key in self.store
+        for (key, offset) in self.store.iter_mut() {
+            // save current value as Command::Set to the new file
+            let value = KvStore::value(&path, *offset)?;
+            let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
+            let offset_change = new_log.write((command + "\n").as_bytes())?;
+            // update key offset
+            *offset = new_offset;
+            new_offset += offset_change as u64;
+        }
+
+        // replace db file with the temporary one
+        fs::rename(&tmp_path, &path)?;
+
+        // update write_log file
+        self.write_log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
+
+        Ok(())
+    }
+
     /// Set a value. Overrides the value if key is already present
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        self.store.insert(key.clone(), self.write_log.seek(SeekFrom::End(0))?);
+        let offset = self.write_log.seek(SeekFrom::End(0))?;
+
+        // trigger compaction if file is ~2000 entries long
+        if offset > 4000 * 22 {
+            self.compact()?;
+        }
+
+        self.store.insert(key.clone(), offset);
         let command = serde_json::to_string(&Command::Set((key, value))).unwrap();
         self.write_log.write((command + "\n").as_bytes())?;
         Ok(())
@@ -150,7 +192,7 @@ impl KvStore {
     /// Get a value.
     pub fn get(&self, key: String) -> Result<Option<String>> {
         match self.store.get(&key) {
-            Some(offset) => Ok(Some(self.value(*offset)?)),
+            Some(offset) => Ok(Some(KvStore::value(&self.full_path, *offset)?)),
             None => Ok(None),
         }
     }
