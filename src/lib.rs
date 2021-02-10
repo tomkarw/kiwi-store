@@ -65,6 +65,12 @@ enum Command {
     Remove(String),
 }
 
+pub trait KvsEngine {
+    fn set(&mut self, key: String, value: String) -> Result<()>;
+    fn get(&mut self, key: String) -> Result<Option<String>>;
+    fn remove(&mut self, key: String) -> Result<()>;
+}
+
 /// KvStore is a key-value store allowing you store values in-memory with O(1) lookup time.
 /// # Example
 /// ```

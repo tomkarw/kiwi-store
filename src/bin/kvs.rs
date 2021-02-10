@@ -34,7 +34,10 @@ pub fn run(matches: &ArgMatches) -> Result<()> {
                 process::exit(1);
             }
         }
-        _ => unreachable!(),
+        _ => {
+            println!("No such command");
+            process::exit(1);
+        },
     }
     Ok(())
 }
