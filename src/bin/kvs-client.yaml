@@ -1,13 +1,18 @@
-name: kvs
+name: kvs-client
 version: "0.1.0"
-author: Tomek Karwowski <to.karwowski@gmail.com>
-about: A key-value store
+author: Tomek K. <to.karwowski@gmail.com>
+about: A key-value store client
 args:
   - version:
       short: V
       long: version
       multiple: false
       help: Output current version
+  - address:
+      long: addr
+      help: IP address, either v4 or v6 in format "IP:PORT"
+      multiple: false
+      default_value: 127.0.0.1:4000
 subcommands:
   - set:
       help: Set value for key
