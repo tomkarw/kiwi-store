@@ -1,31 +1,62 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::Result;
-use std::process;
-use std::net::IpAddr;
+use kvs::{Result, KvStore};
+use std::net::{IpAddr, TcpListener, TcpStream};
 use std::str::FromStr;
+use log::*;
+use std::io::{Read, Write};
 
 fn main() -> Result<()> {
+    // set up logger
+    stderrlog::new()
+        .module(module_path!())
+        .quiet(false)
+        .verbosity(5)
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()
+        .unwrap();
+
+    // set up argument parsing
     let yaml = load_yaml!("kvs-server.yaml");
     let matches = App::from(yaml).get_matches();
+
+    // info!("{}", App::render_version());
 
     run(&matches)
 }
 
-pub fn run(matches: &ArgMatches) -> Result<()> {
-    // ip address extraction
-    let mut iter = matches.value_of("address").unwrap().splitn(2,":");
-    let ip_addr = IpAddr::from_str(iter.next().expect("Bad ip address")).expect("Bad ip address");
-    let port = iter.next().expect("Bad ip address");
-    println!("{:?}, {}", ip_addr, port);
+fn run(matches: &ArgMatches) -> Result<()> {
+    let addr = matches.value_of("address").unwrap();
+    let engine = matches.value_of("engine").unwrap();
 
-    // engine extraction
-    match matches.value_of("engine").unwrap() {
-        "kvs" => println!("kvs"),
-        "sled" => println!("sled"),
+    info!("{}, {}", addr, engine);
+
+    match engine {
+        "kvs" => (),
+        "sled" => (),
         _ => {},
     }
 
-    // let mut store = kvs::KvStore::open(".")?;
+    let mut store = kvs::KvStore::open(".")?;
+
+    let listener = TcpListener::bind(addr)?;
+    for stream in listener.incoming() {
+        handle_connection(stream?)?;
+    }
+
+    Ok(())
+}
+
+fn handle_connection(mut stream: TcpStream) -> Result<()> {
+    let mut buffer = [0; 1024];
+    stream.read(&mut buffer)?; // doesn't work with read_to_string
+
+    info!("{:?}", buffer);
+
+    let response = "processed successfully\n";
+
+    stream.write(response.as_bytes())?;
+    stream.flush()?;
+
     Ok(())
 }

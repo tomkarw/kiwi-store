@@ -2,10 +2,22 @@ use clap::{load_yaml, App, ArgMatches};
 
 use kvs::Result;
 use std::process;
-use std::net::IpAddr;
+use std::net::{IpAddr, TcpStream};
 use std::str::FromStr;
+use std::io::{Write, Read};
+use log::*;
 
 fn main() -> Result<()> {
+    // set up logger
+    stderrlog::new()
+        .module(module_path!())
+        .quiet(false)
+        .verbosity(5)
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()
+        .unwrap();
+
+    // set up argument parsing
     let yaml = load_yaml!("kvs-client.yaml");
     let matches = App::from(yaml).get_matches();
 
@@ -14,10 +26,16 @@ fn main() -> Result<()> {
 
 pub fn run(matches: &ArgMatches) -> Result<()> {
     // ip address extraction
-    let mut iter = matches.value_of("address").unwrap().splitn(2,":");
-    let ip_addr = IpAddr::from_str(iter.next().expect("Bad ip address")).expect("Bad ip address");
-    let port = iter.next().expect("Bad ip address");
-    println!("{:?}, {}", ip_addr, port);
+    let address = matches.value_of("address").unwrap();
+
+    let mut stream = TcpStream::connect(address)?;
+
+    stream.write("can someone hear me?\n".as_bytes())?;
+    stream.flush()?;
+    let mut buf = String::new();
+    stream.read_to_string(&mut buf)?; // blocks here, unless server terminate
+    info!("{}", buf);
+    return  Ok(());
 
     match matches.subcommand() {
         Some(("set", set_matches)) => {

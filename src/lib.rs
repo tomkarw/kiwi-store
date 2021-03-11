@@ -5,7 +5,7 @@
 //!
 //! Nothing fancy, but should allow you to [KvStore::set], [KvStore::get] and [KvStore::remove]
 //! in a in-memory cache.
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
 use std::path::{PathBuf};
 use std::{result, io, fmt, error, fs};
