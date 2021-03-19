@@ -30,39 +30,32 @@ pub fn run(matches: &ArgMatches) -> Result<()> {
 
     let mut stream = TcpStream::connect(address)?;
 
-    stream.write("can someone hear me?\n".as_bytes())?;
-    stream.flush()?;
-    let mut buf = String::new();
-    stream.read_to_string(&mut buf)?; // blocks here, unless server terminate
-    info!("{}", buf);
-    return  Ok(());
-
     match matches.subcommand() {
+        Some(("get", get_matches)) => {
+            let key = get_matches.value_of("key").unwrap().to_owned();
+            stream.write(format!("GET\n{}\n", key).as_bytes())?;
+            stream.flush()?;
+        }
         Some(("set", set_matches)) => {
             let key = set_matches.value_of("key").unwrap().to_owned();
             let value = set_matches.value_of("value").unwrap().to_owned();
-            // store.set(key, value)?;
-        }
-        Some(("get", get_matches)) => {
-            let key = get_matches.value_of("key").unwrap().to_owned();
-            // let value = store.get(key)?;
-            // match value {
-            //     Some(value) => println!("{}", value),
-            //     None => println!("Key not found"),
-            // }
+            stream.write(format!("SET\n{}\n{}\n", key, value).as_bytes())?;
+            stream.flush()?;
         }
         Some(("rm", remove_matches)) => {
             let key = remove_matches.value_of("key").unwrap().to_owned();
-            // if store.remove(key).is_err() {
-            //     println!("Key not found");
-            //     process::exit(1);
-            // }
+            stream.write(format!("RMV\n{}\n", key).as_bytes())?;
+            stream.flush()?;
         }
         _ => {
             println!("No such command");
             process::exit(1);
         },
     }
+
+    // let mut buf = String::new();
+    // stream.read_to_string(&mut buf)?;
+    // info!("{}", buf);
 
     Ok(())
 }

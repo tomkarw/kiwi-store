@@ -1,10 +1,10 @@
 use clap::{load_yaml, App, ArgMatches};
 
 use kvs::{Result, KvStore};
-use std::net::{IpAddr, TcpListener, TcpStream};
-use std::str::FromStr;
+use std::net::{TcpListener, TcpStream};
 use log::*;
 use std::io::{Read, Write};
+use std::str;
 
 fn main() -> Result<()> {
     // set up logger
@@ -37,24 +37,51 @@ fn run(matches: &ArgMatches) -> Result<()> {
         _ => {},
     }
 
-    let mut store = kvs::KvStore::open(".")?;
+    let mut store = KvStore::open(".")?;
 
     let listener = TcpListener::bind(addr)?;
     for stream in listener.incoming() {
-        handle_connection(stream?)?;
+        handle_connection(&mut store, stream?)?;
     }
 
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) -> Result<()> {
-    let mut buffer = [0; 1024];
-    stream.read(&mut buffer)?; // doesn't work with read_to_string
+fn handle_connection(store: &mut KvStore, mut stream: TcpStream) -> Result<()> {
+    let mut buffer = String::new();
+    stream.read_to_string(&mut buffer)?;
 
-    info!("{:?}", buffer);
+    let mut buffer_iter = buffer.lines();
+    let verb = buffer_iter.next().expect("no input");
+    let mut response = String::new();
 
-    let response = "processed successfully\n";
+    if verb == "GET" {
+        let key = buffer_iter.next().expect("Key was not provided");
+        match  store.get(key.to_string())? {
+            Some(value) => response = format!("OK {}", value),
+            None => response = format!("EMPTY"),
+        }
+    }
+    else if verb == "SET" {
+        let key = buffer_iter.next().expect("Key was not provided");
+        let value = buffer_iter.next().expect("Value was not provided");
+        match store.set(key.to_string(), value.to_string()) {
+            Ok(()) => response = String::from("OK"),
+            Err(error) => response = format!("ERROR {}", error),
+        }
+    }
+    else if verb == "RMV" {
+        let key = buffer_iter.next().expect("Key was not provided");
+        match  store.remove(key.to_string()) {
+            Ok(()) => response = String::from("OK"),
+            Err(error) => response = format!("ERROR {}", error),
+        }
+    }
+    else {
+        response = String::from("ERROR Unrecognised action verb")
+    }
 
+    info!("{}", response);
     stream.write(response.as_bytes())?;
     stream.flush()?;
 
