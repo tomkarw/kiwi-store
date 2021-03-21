@@ -1,10 +1,9 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{Result, KvStore};
-use std::net::{TcpListener, TcpStream};
-use log::*;
+use kvs::{KvStore, Result};
+use log::info;
 use std::io::{Read, Write};
-use std::str;
+use std::net::{TcpListener, TcpStream};
 
 fn main() -> Result<()> {
     // set up logger
@@ -34,7 +33,7 @@ fn run(matches: &ArgMatches) -> Result<()> {
     match engine {
         "kvs" => (),
         "sled" => (),
-        _ => {},
+        _ => {}
     }
 
     let mut store = KvStore::open(".")?;
@@ -53,36 +52,33 @@ fn handle_connection(store: &mut KvStore, mut stream: TcpStream) -> Result<()> {
 
     let mut buffer_iter = buffer.lines();
     let verb = buffer_iter.next().expect("no input");
-    let mut response = String::new();
+    let response;
 
     if verb == "GET" {
         let key = buffer_iter.next().expect("Key was not provided");
-        match  store.get(key.to_string())? {
-            Some(value) => response = format!("OK {}", value),
-            None => response = format!("EMPTY"),
+        match store.get(key.to_string())? {
+            Some(value) => response = format!("OK {}\n", value),
+            None => response = String::from("EMPTY\n"),
         }
-    }
-    else if verb == "SET" {
+    } else if verb == "SET" {
         let key = buffer_iter.next().expect("Key was not provided");
         let value = buffer_iter.next().expect("Value was not provided");
         match store.set(key.to_string(), value.to_string()) {
-            Ok(()) => response = String::from("OK"),
-            Err(error) => response = format!("ERROR {}", error),
+            Ok(()) => response = String::from("OK\n"),
+            Err(error) => response = format!("ERROR {}\n", error),
         }
-    }
-    else if verb == "RMV" {
+    } else if verb == "RM" {
         let key = buffer_iter.next().expect("Key was not provided");
-        match  store.remove(key.to_string()) {
-            Ok(()) => response = String::from("OK"),
-            Err(error) => response = format!("ERROR {}", error),
+        match store.remove(key.to_string()) {
+            Ok(()) => response = String::from("OK\n"),
+            Err(error) => response = format!("ERROR {}\n", error),
         }
-    }
-    else {
-        response = String::from("ERROR Unrecognised action verb")
+    } else {
+        response = String::from("ERROR Unrecognised action verb\n")
     }
 
     info!("{}", response);
-    stream.write(response.as_bytes())?;
+    stream.write_all(response.as_bytes())?;
     stream.flush()?;
 
     Ok(())

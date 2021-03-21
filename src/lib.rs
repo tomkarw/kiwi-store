@@ -7,14 +7,14 @@
 //! in a in-memory cache.
 // #![warn(missing_docs)]
 
-use std::path::{PathBuf};
-use std::{result, io, fmt, error, fs};
-use std::fs::{File, OpenOptions};
-use std::io::{Write, BufReader, BufRead, Seek, SeekFrom};
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 use serde::export::Formatter;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Display;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
+use std::path::PathBuf;
+use std::{error, fmt, fs, io, result};
 
 /// Result specific for this crate, for now it's error case is `Box<dyn Error>` but this might change
 // TODO(tkarwowski): might use https://docs.rs/fehler/1.0.0/fehler/ instead
@@ -99,7 +99,6 @@ pub struct KvStore {
 impl KvStore {
     /// Open KvStore at a specified location.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
-
         let mut full_path = path.into();
         full_path.push("kvs.db");
 
@@ -119,10 +118,10 @@ impl KvStore {
                 match serde_json::from_str(&buffer)? {
                     Command::Set((key, _)) => {
                         store.insert(key, current_offset as u64);
-                    },
+                    }
                     Command::Remove(key) => {
                         store.remove(&key);
-                    },
+                    }
                 };
 
                 buffer.clear();
@@ -135,7 +134,11 @@ impl KvStore {
             .append(true)
             .open(&full_path)?;
 
-        Ok(KvStore { write_log, full_path, store })
+        Ok(KvStore {
+            write_log,
+            full_path,
+            store,
+        })
     }
 
     fn value(path: &PathBuf, offset: u64) -> Result<String> {
@@ -162,7 +165,6 @@ impl KvStore {
             .open(&tmp_path)?;
         let mut new_offset = 0u64;
 
-
         // for each key in self.store
         for (key, offset) in self.store.iter_mut() {
             // save current value as Command::Set to the new file
@@ -178,10 +180,7 @@ impl KvStore {
         fs::rename(&tmp_path, &path)?;
 
         // update write_log file
-        self.write_log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        self.write_log = OpenOptions::new().create(true).append(true).open(&path)?;
 
         Ok(())
     }
@@ -197,7 +196,7 @@ impl KvStore {
 
         self.store.insert(key.clone(), offset);
         let command = serde_json::to_string(&Command::Set((key, value))).unwrap();
-        self.write_log.write((command + "\n").as_bytes())?;
+        self.write_log.write_all((command + "\n").as_bytes())?;
         Ok(())
     }
 
@@ -214,12 +213,10 @@ impl KvStore {
         match self.store.get(&key) {
             Some(_) => {
                 self.store.remove(&key);
-                let command = serde_json::to_string(
-                    &Command::Remove(key)
-                ).unwrap();
-                self.write_log.write((command + "\n").as_bytes())?;
+                let command = serde_json::to_string(&Command::Remove(key)).unwrap();
+                self.write_log.write_all((command + "\n").as_bytes())?;
                 Ok(())
-            },
+            }
             None => Err(Error::NoKey(String::from("Key not found"))),
         }
     }

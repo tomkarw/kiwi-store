@@ -37,7 +37,7 @@ pub fn run(matches: &ArgMatches) -> Result<()> {
         _ => {
             println!("No such command");
             process::exit(1);
-        },
+        }
     }
     Ok(())
 }
