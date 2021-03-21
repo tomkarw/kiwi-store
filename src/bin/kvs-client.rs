@@ -2,9 +2,10 @@ use clap::{load_yaml, App, ArgMatches};
 
 use kvs::Result;
 use log::info;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process;
+use std::str;
 
 fn main() -> Result<()> {
     // set up logger
@@ -52,9 +53,11 @@ pub fn run(matches: &ArgMatches) -> Result<()> {
         }
     }
 
-    // let mut buf = String::new();
-    // stream.read_to_string(&mut buf)?;
-    // info!("{}", buf);
+    let mut buffer = [0; 1024];
+    // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
+    stream.read(&mut buffer)?;
+    let buffer = str::from_utf8(&buffer).unwrap();
+    info!("{}", buffer);
 
     Ok(())
 }

@@ -4,6 +4,7 @@ use kvs::{KvStore, Result};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::str;
 
 fn main() -> Result<()> {
     // set up logger
@@ -18,8 +19,6 @@ fn main() -> Result<()> {
     // set up argument parsing
     let yaml = load_yaml!("kvs-server.yaml");
     let matches = App::from(yaml).get_matches();
-
-    // info!("{}", App::render_version());
 
     run(&matches)
 }
@@ -47,35 +46,40 @@ fn run(matches: &ArgMatches) -> Result<()> {
 }
 
 fn handle_connection(store: &mut KvStore, mut stream: TcpStream) -> Result<()> {
-    let mut buffer = String::new();
-    stream.read_to_string(&mut buffer)?;
+    let mut buffer = [0; 1024];
+    // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
+    stream.read(&mut buffer)?;
+    let buffer = str::from_utf8(&buffer).unwrap();
 
     let mut buffer_iter = buffer.lines();
     let verb = buffer_iter.next().expect("no input");
-    let response;
 
-    if verb == "GET" {
+    // TODO: response could be a &str
+    let response = if verb == "GET" {
         let key = buffer_iter.next().expect("Key was not provided");
-        match store.get(key.to_string())? {
-            Some(value) => response = format!("OK {}\n", value),
-            None => response = String::from("EMPTY\n"),
+        match store.get(key.to_owned()) {
+            Ok(result) => match result {
+                Some(value) => format!("OK {}\n", value),
+                None => String::from("EMPTY\n"),
+            },
+            Err(error) => format!("ERROR {}\n", error),
         }
     } else if verb == "SET" {
         let key = buffer_iter.next().expect("Key was not provided");
         let value = buffer_iter.next().expect("Value was not provided");
-        match store.set(key.to_string(), value.to_string()) {
-            Ok(()) => response = String::from("OK\n"),
-            Err(error) => response = format!("ERROR {}\n", error),
+        match store.set(key.to_owned(), value.to_owned()) {
+            Ok(()) => String::from("OK\n"),
+            Err(error) => format!("ERROR {}\n", error),
         }
     } else if verb == "RM" {
         let key = buffer_iter.next().expect("Key was not provided");
-        match store.remove(key.to_string()) {
-            Ok(()) => response = String::from("OK\n"),
-            Err(error) => response = format!("ERROR {}\n", error),
+        match store.remove(key.to_owned()) {
+            Ok(()) => String::from("OK\n"),
+            Err(error) => format!("ERROR {}\n", error),
         }
     } else {
-        response = String::from("ERROR Unrecognised action verb\n")
-    }
+        String::from("ERROR Unrecognised action verb\n")
+    };
 
     info!("{}", response);
     stream.write_all(response.as_bytes())?;
