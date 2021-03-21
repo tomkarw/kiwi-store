@@ -1,6 +1,6 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::Result;
+use kvs::{KvsEngine, Result};
 use std::process;
 
 fn main() -> Result<()> {

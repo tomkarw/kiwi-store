@@ -1,6 +1,6 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{KvStore, Result};
+use kvs::{KvStore, KvsEngine, Result};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -19,6 +19,8 @@ fn main() -> Result<()> {
     // set up argument parsing
     let yaml = load_yaml!("kvs-server.yaml");
     let matches = App::from(yaml).get_matches();
+
+    info!("kvs-server v{} running", env!("CARGO_PKG_VERSION"));
 
     run(&matches)
 }

@@ -65,9 +65,10 @@ enum Command {
     Remove(String),
 }
 
+/// Provides a generic set of actions extracted from KvStore
 pub trait KvsEngine {
-    fn set(&mut self, key: String, value: String) -> Result<()>;
     fn get(&mut self, key: String) -> Result<Option<String>>;
+    fn set(&mut self, key: String, value: String) -> Result<()>;
     fn remove(&mut self, key: String) -> Result<()>;
 }
 
@@ -78,7 +79,7 @@ pub trait KvsEngine {
 /// # use tempfile::TempDir;
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// # let some_dir = TempDir::new().unwrap();
-/// use kvs::KvStore;
+/// use kvs::{KvStore, KvsEngine};
 /// let mut store = KvStore::open(some_dir.path())?;
 ///
 /// store.set("key1".to_owned(), "value1".to_owned());
@@ -184,12 +185,22 @@ impl KvStore {
 
         Ok(())
     }
+}
+
+impl KvsEngine for KvStore {
+    /// Get a value.
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        match self.store.get(&key) {
+            Some(offset) => Ok(Some(KvStore::value(&self.full_path, *offset)?)),
+            None => Ok(None),
+        }
+    }
 
     /// Set a value. Overrides the value if key is already present
-    pub fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&mut self, key: String, value: String) -> Result<()> {
         let offset = self.write_log.seek(SeekFrom::End(0))?;
 
-        // trigger compaction if file is ~2000 entries long
+        // trigger compaction if file is ~4000 entries long
         if offset > 4000 * 22 {
             self.compact()?;
         }
@@ -200,16 +211,8 @@ impl KvStore {
         Ok(())
     }
 
-    /// Get a value.
-    pub fn get(&self, key: String) -> Result<Option<String>> {
-        match self.store.get(&key) {
-            Some(offset) => Ok(Some(KvStore::value(&self.full_path, *offset)?)),
-            None => Ok(None),
-        }
-    }
-
     /// Remove a value. If value wasn't present, nothing happens.
-    pub fn remove(&mut self, key: String) -> Result<()> {
+    fn remove(&mut self, key: String) -> Result<()> {
         match self.store.get(&key) {
             Some(_) => {
                 self.store.remove(&key);
