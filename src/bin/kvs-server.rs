@@ -1,10 +1,12 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{KvStore, KvsEngine, Result};
+use kvs::{Error, KvStore, KvsEngine, Result, SledKvsEngine};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str;
+
+static DB_PATH: &str = "./databases";
 
 fn main() -> Result<()> {
     // set up logger
@@ -32,13 +34,19 @@ fn run(matches: &ArgMatches) -> Result<()> {
     info!("{}, {}", addr, engine);
 
     match engine {
-        "kvs" => (),
-        "sled" => (),
-        _ => {}
-    }
+        "kvs" => start_listening(&mut KvStore::open(DB_PATH)?, addr),
+        "sled" => start_listening(&mut SledKvsEngine::open(DB_PATH)?, addr),
+        _ => {
+            return Err(Error::Other(
+                "unknown engine option, must be one of: kvs, sled".to_owned(),
+            ))
+        }
+    }?;
 
-    let mut store = KvStore::open(".")?;
+    Ok(())
+}
 
+fn start_listening<E: KvsEngine>(mut store: &mut E, addr: &str) -> Result<()> {
     let listener = TcpListener::bind(addr)?;
     for stream in listener.incoming() {
         handle_connection(&mut store, stream?)?;
@@ -47,7 +55,7 @@ fn run(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn handle_connection(store: &mut KvStore, mut stream: TcpStream) -> Result<()> {
+fn handle_connection<E: KvsEngine>(store: &mut &mut E, mut stream: TcpStream) -> Result<()> {
     let mut buffer = [0; 1024];
     // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
     stream.read(&mut buffer)?;
@@ -56,7 +64,7 @@ fn handle_connection(store: &mut KvStore, mut stream: TcpStream) -> Result<()> {
     let mut buffer_iter = buffer.lines();
     let verb = buffer_iter.next().expect("no input");
 
-    // TODO: response could be a &str
+    // TODO(tkarwowski): response could be a &str
     let response = if verb == "GET" {
         let key = buffer_iter.next().expect("Key was not provided");
         match store.get(key.to_owned()) {

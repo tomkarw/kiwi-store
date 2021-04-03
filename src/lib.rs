@@ -9,11 +9,13 @@
 
 use serde::export::Formatter;
 use serde::{Deserialize, Serialize};
+use sled::Db;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+use std::str;
 use std::{error, fmt, fs, io, result};
 
 /// Result specific for this crate, for now it's error case is `Box<dyn Error>` but this might change
@@ -32,6 +34,12 @@ pub enum Error {
     Io(io::Error),
     /// Error when deserialization failed due to file corruption
     InvalidData(serde_json::Error),
+    /// Error when parsing utf-8 to string
+    Utf8Error(str::Utf8Error),
+    /// Error passed from Sled implementation of KvsEngine
+    Sled(sled::Error),
+    /// Any ad hoc error
+    Other(String),
 }
 
 impl Display for Error {
@@ -41,6 +49,9 @@ impl Display for Error {
             Error::Offset(msg) => write!(f, "{}", msg),
             Error::Io(msg) => write!(f, "{}", msg),
             Error::InvalidData(msg) => write!(f, "{}", msg),
+            Error::Utf8Error(msg) => write!(f, "{}", msg),
+            Error::Sled(msg) => write!(f, "{}", msg),
+            Error::Other(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -56,6 +67,18 @@ impl From<io::Error> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error::InvalidData(err)
+    }
+}
+
+impl From<sled::Error> for Error {
+    fn from(err: sled::Error) -> Self {
+        Error::Sled(err)
+    }
+}
+
+impl From<str::Utf8Error> for Error {
+    fn from(err: str::Utf8Error) -> Self {
+        Error::Utf8Error(err)
     }
 }
 
@@ -221,6 +244,44 @@ impl KvsEngine for KvStore {
                 Ok(())
             }
             None => Err(Error::NoKey(String::from("Key not found"))),
+        }
+    }
+}
+
+pub struct SledKvsEngine {
+    db: Db,
+}
+
+impl SledKvsEngine {
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
+        Ok(SledKvsEngine {
+            db: sled::open(path.into())?,
+        })
+    }
+}
+
+impl KvsEngine for SledKvsEngine {
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        match self.db.get(key.as_bytes()) {
+            Ok(result) => match result {
+                Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
+                None => Ok(None),
+            },
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        match self.db.insert(key.as_bytes(), value.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+    fn remove(&mut self, key: String) -> Result<()> {
+        match self.db.remove(key.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Error::Sled(error)),
         }
     }
 }
