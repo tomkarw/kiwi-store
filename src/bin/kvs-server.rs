@@ -4,9 +4,10 @@ use kvs::{Error, KvStore, KvsEngine, Result, SledKvsEngine};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::str;
+use std::path::Path;
+use std::{env, str, fs};
 
-static DB_PATH: &str = "./databases";
+static DB_PATH: &str = "./database";
 
 fn main() -> Result<()> {
     // set up logger
@@ -22,8 +23,6 @@ fn main() -> Result<()> {
     let yaml = load_yaml!("kvs-server.yaml");
     let matches = App::from(yaml).get_matches();
 
-    info!("kvs-server v{} running", env!("CARGO_PKG_VERSION"));
-
     run(&matches)
 }
 
@@ -31,11 +30,26 @@ fn run(matches: &ArgMatches) -> Result<()> {
     let addr = matches.value_of("address").unwrap();
     let engine = matches.value_of("engine").unwrap();
 
-    info!("{}, {}", addr, engine);
+    info!("kvs-server v{} running at {}", env!("CARGO_PKG_VERSION"), addr);
+
+    // TODO: create ./database if not exists
+    if !Path::new(DB_PATH).exists() {
+        fs::create_dir(DB_PATH)?
+    }
 
     match engine {
-        "kvs" => start_listening(&mut KvStore::open(DB_PATH)?, addr),
-        "sled" => start_listening(&mut SledKvsEngine::open(DB_PATH)?, addr),
+        "kvs" => {
+            if Path::new(DB_PATH).join("db").exists() {
+                return Err(Error::Other("sled database already exists".to_owned()));
+            }
+            start_listening(&mut KvStore::open(DB_PATH)?, addr)
+        }
+        "sled" => {
+            if Path::new(DB_PATH).join("kvs.db").exists() {
+                return Err(Error::Other("kvs database already exists".to_owned()));
+            }
+            start_listening(&mut SledKvsEngine::open(DB_PATH)?, addr)
+        }
         _ => {
             return Err(Error::Other(
                 "unknown engine option, must be one of: kvs, sled".to_owned(),
@@ -64,7 +78,6 @@ fn handle_connection<E: KvsEngine>(store: &mut &mut E, mut stream: TcpStream) ->
     let mut buffer_iter = buffer.lines();
     let verb = buffer_iter.next().expect("no input");
 
-    // TODO(tkarwowski): response could be a &str
     let response = if verb == "GET" {
         let key = buffer_iter.next().expect("Key was not provided");
         match store.get(key.to_owned()) {

@@ -8,11 +8,6 @@ args:
       long: version
       multiple: false
       help: Output current version
-  - address:
-      long: addr
-      help: IP address, either v4 or v6 in format "IP:PORT"
-      multiple: false
-      default_value: 127.0.0.1:4000
 subcommands:
   - set:
       help: Set value for key
@@ -23,15 +18,30 @@ subcommands:
         - value:
             required: true
             index: 2
+        - address:
+            long: addr
+            help: IP address, either v4 or v6 in format "IP:PORT"
+            multiple: false
+            default_value: 127.0.0.1:4000
   - get:
       help: Get value for given key
       args:
         - key:
             required: true
             index: 1
+        - address:
+            long: addr
+            help: IP address, either v4 or v6 in format "IP:PORT"
+            multiple: false
+            default_value: 127.0.0.1:4000
   - rm:
       help: Remove key from storage
       args:
         - key:
             required: true
             index: 1
+        - address:
+            long: addr
+            help: IP address, either v4 or v6 in format "IP:PORT"
+            multiple: false
+            default_value: 127.0.0.1:4000

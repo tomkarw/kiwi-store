@@ -1,7 +1,7 @@
 use clap::{load_yaml, App, ArgMatches};
 
 use kvs::Result;
-use log::info;
+// use log::info;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process;
@@ -25,25 +25,29 @@ fn main() -> Result<()> {
 }
 
 pub fn run(matches: &ArgMatches) -> Result<()> {
-    // ip address extraction
-    let address = matches.value_of("address").unwrap();
 
+    let (action, subcommand_matches) = matches.subcommand().unwrap_or_else(|| {
+        println!("No such command");
+        process::exit(1);
+    });
+
+    let address = subcommand_matches.value_of("address").unwrap();
     let mut stream = TcpStream::connect(address)?;
 
-    match matches.subcommand() {
-        Some(("get", get_matches)) => {
-            let key = get_matches.value_of("key").unwrap().to_owned();
+    match action {
+        "get" => {
+            let key = subcommand_matches.value_of("key").unwrap().to_owned();
             stream.write_all(format!("GET\n{}\n", key).as_bytes())?;
             stream.flush()?;
         }
-        Some(("set", set_matches)) => {
-            let key = set_matches.value_of("key").unwrap().to_owned();
-            let value = set_matches.value_of("value").unwrap().to_owned();
+        "set" => {
+            let key = subcommand_matches.value_of("key").unwrap().to_owned();
+            let value = subcommand_matches.value_of("value").unwrap().to_owned();
             stream.write_all(format!("SET\n{}\n{}\n", key, value).as_bytes())?;
             stream.flush()?;
         }
-        Some(("rm", remove_matches)) => {
-            let key = remove_matches.value_of("key").unwrap().to_owned();
+        "rm" => {
+            let key = subcommand_matches.value_of("key").unwrap().to_owned();
             stream.write_all(format!("RM\n{}\n", key).as_bytes())?;
             stream.flush()?;
         }
@@ -57,7 +61,7 @@ pub fn run(matches: &ArgMatches) -> Result<()> {
     // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
     stream.read(&mut buffer)?;
     let buffer = str::from_utf8(&buffer).unwrap();
-    info!("{}", buffer);
+    println!("{}", buffer);
 
     Ok(())
 }
