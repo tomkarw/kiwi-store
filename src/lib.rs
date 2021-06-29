@@ -7,16 +7,17 @@
 //! in a in-memory cache.
 // #![warn(missing_docs)]
 
-use serde::export::Formatter;
-use serde::{Deserialize, Serialize};
-use sled::Db;
+use std::{error, fmt, fs, io, result};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::str;
-use std::{error, fmt, fs, io, result};
+
+use serde::{Deserialize, Serialize};
+use serde::export::Formatter;
+use sled::Db;
 
 /// Result specific for this crate, for now it's error case is `Box<dyn Error>` but this might change
 // TODO(tkarwowski): might use https://docs.rs/fehler/1.0.0/fehler/ instead

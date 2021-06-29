@@ -32,7 +32,6 @@ fn run(matches: &ArgMatches) -> Result<()> {
 
     info!("kvs-server v{} running at {}", env!("CARGO_PKG_VERSION"), addr);
 
-    // TODO: create ./database if not exists
     if !Path::new(DB_PATH).exists() {
         fs::create_dir(DB_PATH)?
     }
