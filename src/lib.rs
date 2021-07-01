@@ -91,6 +91,7 @@ enum Command {
 
 /// Provides a generic set of actions extracted from KvStore
 pub trait KvsEngine {
+
     fn get(&mut self, key: String) -> Result<Option<String>>;
     fn set(&mut self, key: String, value: String) -> Result<()>;
     fn remove(&mut self, key: String) -> Result<()>;
@@ -119,6 +120,12 @@ pub struct KvStore {
     write_log: File,
     full_path: PathBuf,
     store: HashMap<String, u64>,
+}
+
+impl Clone for KvStore {
+    fn clone(&self) -> Self {
+        todo!()
+    }
 }
 
 impl KvStore {
@@ -249,6 +256,7 @@ impl KvsEngine for KvStore {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SledKvsEngine {
     db: Db,
 }
@@ -286,3 +294,16 @@ impl KvsEngine for SledKvsEngine {
         }
     }
 }
+
+// trait ThreadPool {
+//     /// Creates a new thread pool, immediately spawning the specified number of threads.
+//     ///
+//     /// Returns an error if any thread fails to spawn. All previously-spawned threads are terminated.
+//     fn new(threads: u32) -> Result<dyn ThreadPool> where Self: Sized;
+//     /// Spawn a function into the threadpool.
+//     ///
+//     /// Spawning always succeeds, but if the function panics the threadpool continues
+//     /// to operate with the same number of threads — the thread count is not reduced
+//     /// nor is the thread pool destroyed, corrupted or invalidated.
+//     fn spawn<F>(&self, job: F) where F: FnOnce() + Send + 'static;
+// }
