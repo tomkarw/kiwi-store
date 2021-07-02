@@ -14,74 +14,19 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::str;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde::export::Formatter;
 use sled::Db;
 
-/// Result specific for this crate, for now it's error case is `Box<dyn Error>` but this might change
-// TODO(tkarwowski): might use https://docs.rs/fehler/1.0.0/fehler/ instead
-pub type Result<T> = result::Result<T, Error>;
+pub use err::{Error, Result};
+pub use thread_pool::*;
 
-/// Errors possible, [`NoKey`] is KvStore specific,
-/// the rest is simply propagated from lower functions
-#[derive(Debug)]
-pub enum Error {
-    /// Error when trying to remove non-existing key
-    NoKey(String),
-    /// Error when Seek fails due to file corruption
-    Offset(String),
-    /// Error when any of the IO operation fails
-    Io(io::Error),
-    /// Error when deserialization failed due to file corruption
-    InvalidData(serde_json::Error),
-    /// Error when parsing utf-8 to string
-    Utf8Error(str::Utf8Error),
-    /// Error passed from Sled implementation of KvsEngine
-    Sled(sled::Error),
-    /// Any ad hoc error
-    Other(String),
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::NoKey(msg) => write!(f, "{}", msg),
-            Error::Offset(msg) => write!(f, "{}", msg),
-            Error::Io(msg) => write!(f, "{}", msg),
-            Error::InvalidData(msg) => write!(f, "{}", msg),
-            Error::Utf8Error(msg) => write!(f, "{}", msg),
-            Error::Sled(msg) => write!(f, "{}", msg),
-            Error::Other(msg) => write!(f, "{}", msg),
-        }
-    }
-}
-
-impl error::Error for Error {}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::Io(err)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::InvalidData(err)
-    }
-}
-
-impl From<sled::Error> for Error {
-    fn from(err: sled::Error) -> Self {
-        Error::Sled(err)
-    }
-}
-
-impl From<str::Utf8Error> for Error {
-    fn from(err: str::Utf8Error) -> Self {
-        Error::Utf8Error(err)
-    }
-}
+/// Reexport Result and Error
+mod err;
+/// Reexport ThreadPool and it's implementations
+mod thread_pool;
 
 #[derive(Serialize, Deserialize, Debug)]
 enum Command {
@@ -89,12 +34,18 @@ enum Command {
     Remove(String),
 }
 
+#[derive(Debug)]
+pub struct KvStoreInner {
+    write_log: File,
+    full_path: PathBuf,
+    store: HashMap<String, u64>,
+}
+
 /// Provides a generic set of actions extracted from KvStore
 pub trait KvsEngine {
-
-    fn get(&mut self, key: String) -> Result<Option<String>>;
-    fn set(&mut self, key: String, value: String) -> Result<()>;
-    fn remove(&mut self, key: String) -> Result<()>;
+    fn set(&self, key: String, value: String) -> Result<()>;
+    fn get(&self, key: String) -> Result<Option<String>>;
+    fn remove(&self, key: String) -> Result<()>;
 }
 
 /// KvStore is a key-value store allowing you store values in-memory with O(1) lookup time.
@@ -117,15 +68,7 @@ pub trait KvsEngine {
 /// ```
 #[derive(Debug)]
 pub struct KvStore {
-    write_log: File,
-    full_path: PathBuf,
-    store: HashMap<String, u64>,
-}
-
-impl Clone for KvStore {
-    fn clone(&self) -> Self {
-        todo!()
-    }
+    inner: Arc<Mutex<KvStoreInner>>,
 }
 
 impl KvStore {
@@ -167,9 +110,12 @@ impl KvStore {
             .open(&full_path)?;
 
         Ok(KvStore {
-            write_log,
-            full_path,
-            store,
+            inner: Arc::new(Mutex::new(KvStoreInner
+            {
+                write_log,
+                full_path,
+                store,
+            }))
         })
     }
 
@@ -186,10 +132,12 @@ impl KvStore {
         }
     }
 
-    fn compact(&mut self) -> Result<()> {
+    fn compact(&self) -> Result<()> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+
         // open new file kvs.db.tmp
-        let path = self.full_path.clone();
-        let tmp_path = self.full_path.clone().with_extension(".tmp");
+        let path = inner.full_path.clone();
+        let tmp_path = inner.full_path.clone().with_extension(".tmp");
 
         let mut new_log = OpenOptions::new()
             .create(true)
@@ -198,7 +146,7 @@ impl KvStore {
         let mut new_offset = 0u64;
 
         // for each key in self.store
-        for (key, offset) in self.store.iter_mut() {
+        for (key, offset) in inner.store.iter_mut() {
             // save current value as Command::Set to the new file
             let value = KvStore::value(&path, *offset)?;
             let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
@@ -212,43 +160,47 @@ impl KvStore {
         fs::rename(&tmp_path, &path)?;
 
         // update write_log file
-        self.write_log = OpenOptions::new().create(true).append(true).open(&path)?;
+        inner.write_log = OpenOptions::new().create(true).append(true).open(&path)?;
 
         Ok(())
     }
 }
 
 impl KvsEngine for KvStore {
-    /// Get a value.
-    fn get(&mut self, key: String) -> Result<Option<String>> {
-        match self.store.get(&key) {
-            Some(offset) => Ok(Some(KvStore::value(&self.full_path, *offset)?)),
-            None => Ok(None),
-        }
-    }
-
     /// Set a value. Overrides the value if key is already present
-    fn set(&mut self, key: String, value: String) -> Result<()> {
-        let offset = self.write_log.seek(SeekFrom::End(0))?;
+    fn set(&self, key: String, value: String) -> Result<()> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+
+        let offset = inner.write_log.seek(SeekFrom::End(0))?;
 
         // trigger compaction if file is ~4000 entries long
         if offset > 4000 * 22 {
             self.compact()?;
         }
 
-        self.store.insert(key.clone(), offset);
+        inner.store.insert(key.clone(), offset);
         let command = serde_json::to_string(&Command::Set((key, value))).unwrap();
-        self.write_log.write_all((command + "\n").as_bytes())?;
+        inner.write_log.write_all((command + "\n").as_bytes())?;
         Ok(())
     }
 
+    /// Get a value.
+    fn get(&self, key: String) -> Result<Option<String>> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+        match inner.store.get(&key) {
+            Some(offset) => Ok(Some(KvStore::value(&inner.full_path, *offset)?)),
+            None => Ok(None),
+        }
+    }
+
     /// Remove a value. If value wasn't present, nothing happens.
-    fn remove(&mut self, key: String) -> Result<()> {
-        match self.store.get(&key) {
+    fn remove(&self, key: String) -> Result<()> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+        match inner.store.get(&key) {
             Some(_) => {
-                self.store.remove(&key);
+                inner.store.remove(&key);
                 let command = serde_json::to_string(&Command::Remove(key)).unwrap();
-                self.write_log.write_all((command + "\n").as_bytes())?;
+                inner.write_log.write_all((command + "\n").as_bytes())?;
                 Ok(())
             }
             None => Err(Error::NoKey(String::from("Key not found"))),
@@ -258,20 +210,38 @@ impl KvsEngine for KvStore {
 
 #[derive(Debug, Clone)]
 pub struct SledKvsEngine {
+    inner: Arc<Mutex<SledKvsEngineInner>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SledKvsEngineInner {
     db: Db,
 }
 
 impl SledKvsEngine {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         Ok(SledKvsEngine {
-            db: sled::open(path.into())?,
+            inner: Arc::new(Mutex::new(
+                SledKvsEngineInner {
+                    db: sled::open(path.into())?,
+                }
+            ))
         })
     }
 }
 
 impl KvsEngine for SledKvsEngine {
-    fn get(&mut self, key: String) -> Result<Option<String>> {
-        match self.db.get(key.as_bytes()) {
+    fn set(&self, key: String, value: String) -> Result<()> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+        match inner.db.insert(key.as_bytes(), value.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+    fn get(&self, key: String) -> Result<Option<String>> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+        match inner.db.get(key.as_bytes()) {
             Ok(result) => match result {
                 Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
                 None => Ok(None),
@@ -280,30 +250,11 @@ impl KvsEngine for SledKvsEngine {
         }
     }
 
-    fn set(&mut self, key: String, value: String) -> Result<()> {
-        match self.db.insert(key.as_bytes(), value.as_bytes()) {
-            Ok(_) => Ok(()),
-            Err(error) => Err(Error::Sled(error)),
-        }
-    }
-
-    fn remove(&mut self, key: String) -> Result<()> {
-        match self.db.remove(key.as_bytes()) {
+    fn remove(&self, key: String) -> Result<()> {
+        let mut inner = self.inner.lock().expect("error acquiring lock");
+        match inner.db.remove(key.as_bytes()) {
             Ok(_) => Ok(()),
             Err(error) => Err(Error::Sled(error)),
         }
     }
 }
-
-// trait ThreadPool {
-//     /// Creates a new thread pool, immediately spawning the specified number of threads.
-//     ///
-//     /// Returns an error if any thread fails to spawn. All previously-spawned threads are terminated.
-//     fn new(threads: u32) -> Result<dyn ThreadPool> where Self: Sized;
-//     /// Spawn a function into the threadpool.
-//     ///
-//     /// Spawning always succeeds, but if the function panics the threadpool continues
-//     /// to operate with the same number of threads — the thread count is not reduced
-//     /// nor is the thread pool destroyed, corrupted or invalidated.
-//     fn spawn<F>(&self, job: F) where F: FnOnce() + Send + 'static;
-// }
