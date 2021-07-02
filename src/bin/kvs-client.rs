@@ -25,7 +25,6 @@ fn main() -> Result<()> {
 }
 
 pub fn run(matches: &ArgMatches) -> Result<()> {
-
     let (action, subcommand_matches) = matches.subcommand().unwrap_or_else(|| {
         println!("No such command");
         process::exit(1);

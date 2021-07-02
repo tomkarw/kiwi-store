@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 }
 
 pub fn run(matches: &ArgMatches) -> Result<()> {
-    let mut store = kvs::KvStore::open(".")?;
+    let store = kvs::KvStore::open(".")?;
 
     match matches.subcommand() {
         Some(("set", set_matches)) => {

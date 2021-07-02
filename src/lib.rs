@@ -6,18 +6,15 @@
 //! Nothing fancy, but should allow you to [KvStore::set], [KvStore::get] and [KvStore::remove]
 //! in a in-memory cache.
 // #![warn(missing_docs)]
-
-use std::{error, fmt, fs, io, result};
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use serde::export::Formatter;
 use sled::Db;
 
 pub use err::{Error, Result};
@@ -66,7 +63,7 @@ pub trait KvsEngine {
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KvStore {
     inner: Arc<Mutex<KvStoreInner>>,
 }
@@ -110,16 +107,15 @@ impl KvStore {
             .open(&full_path)?;
 
         Ok(KvStore {
-            inner: Arc::new(Mutex::new(KvStoreInner
-            {
+            inner: Arc::new(Mutex::new(KvStoreInner {
                 write_log,
                 full_path,
                 store,
-            }))
+            })),
         })
     }
 
-    fn value(path: &PathBuf, offset: u64) -> Result<String> {
+    fn value(path: &Path, offset: u64) -> Result<String> {
         let mut file = File::open(path)?;
 
         file.seek(SeekFrom::Start(offset))?;
@@ -186,7 +182,7 @@ impl KvsEngine for KvStore {
 
     /// Get a value.
     fn get(&self, key: String) -> Result<Option<String>> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
+        let inner = self.inner.lock().expect("error acquiring lock");
         match inner.store.get(&key) {
             Some(offset) => Ok(Some(KvStore::value(&inner.full_path, *offset)?)),
             None => Ok(None),
@@ -221,18 +217,16 @@ pub struct SledKvsEngineInner {
 impl SledKvsEngine {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         Ok(SledKvsEngine {
-            inner: Arc::new(Mutex::new(
-                SledKvsEngineInner {
-                    db: sled::open(path.into())?,
-                }
-            ))
+            inner: Arc::new(Mutex::new(SledKvsEngineInner {
+                db: sled::open(path.into())?,
+            })),
         })
     }
 }
 
 impl KvsEngine for SledKvsEngine {
     fn set(&self, key: String, value: String) -> Result<()> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
+        let inner = self.inner.lock().expect("error acquiring lock");
         match inner.db.insert(key.as_bytes(), value.as_bytes()) {
             Ok(_) => Ok(()),
             Err(error) => Err(Error::Sled(error)),
@@ -240,7 +234,7 @@ impl KvsEngine for SledKvsEngine {
     }
 
     fn get(&self, key: String) -> Result<Option<String>> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
+        let inner = self.inner.lock().expect("error acquiring lock");
         match inner.db.get(key.as_bytes()) {
             Ok(result) => match result {
                 Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
@@ -251,7 +245,7 @@ impl KvsEngine for SledKvsEngine {
     }
 
     fn remove(&self, key: String) -> Result<()> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
+        let inner = self.inner.lock().expect("error acquiring lock");
         match inner.db.remove(key.as_bytes()) {
             Ok(_) => Ok(()),
             Err(error) => Err(Error::Sled(error)),

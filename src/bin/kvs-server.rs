@@ -5,7 +5,7 @@ use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::{env, str, fs};
+use std::{env, fs, str};
 
 static DB_PATH: &str = "./database";
 
@@ -30,7 +30,11 @@ fn run(matches: &ArgMatches) -> Result<()> {
     let addr = matches.value_of("address").unwrap();
     let engine = matches.value_of("engine").unwrap();
 
-    info!("kvs-server v{} running at {}", env!("CARGO_PKG_VERSION"), addr);
+    info!(
+        "kvs-server v{} running at {}",
+        env!("CARGO_PKG_VERSION"),
+        addr
+    );
 
     if !Path::new(DB_PATH).exists() {
         fs::create_dir(DB_PATH)?
