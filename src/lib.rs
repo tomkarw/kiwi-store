@@ -23,7 +23,7 @@ pub use thread_pool::*;
 /// Reexport Result and Error
 mod err;
 /// Reexport ThreadPool and it's implementations
-mod thread_pool;
+pub mod thread_pool;
 
 #[derive(Serialize, Deserialize, Debug)]
 enum Command {
@@ -39,7 +39,7 @@ pub struct KvStoreInner {
 }
 
 /// Provides a generic set of actions extracted from KvStore
-pub trait KvsEngine {
+pub trait KvsEngine: Clone + Send + 'static {
     fn set(&self, key: String, value: String) -> Result<()>;
     fn get(&self, key: String) -> Result<Option<String>>;
     fn remove(&self, key: String) -> Result<()>;

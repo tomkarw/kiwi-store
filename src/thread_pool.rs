@@ -1,11 +1,11 @@
 use std::thread;
-// use crate::err::{Result, Error};
+use crate::err::{Result, Error};
 
 pub trait ThreadPool {
     /// Creates a new thread pool, immediately spawning the specified number of threads.
     ///
     /// Returns an error if any thread fails to spawn. All previously-spawned threads are terminated.
-    // fn new(threads: u32) -> Result<dyn ThreadPool> where Self: Sized;
+    fn new(threads: u32) -> Result<Self> where Self: Sized;
     /// Spawn a function into the threadpool.
     ///
     /// Spawning always succeeds, but if the function panics the threadpool continues
@@ -16,13 +16,46 @@ pub trait ThreadPool {
         F: FnOnce() + Send + 'static;
 }
 
-struct NaiveThreadPool {}
+pub struct NaiveThreadPool {}
 
 impl ThreadPool for NaiveThreadPool {
+    fn new(threads: u32) -> Result<Self> where Self: Sized {
+        Ok(NaiveThreadPool{})
+    }
+
     fn spawn<F>(&self, job: F)
     where
         F: FnOnce() + Send + 'static,
     {
         thread::spawn(job);
+    }
+}
+
+pub struct SharedQueueThreadPool {}
+
+impl ThreadPool for SharedQueueThreadPool {
+    fn new(threads: u32) -> Result<Self> where Self: Sized {
+        Ok(SharedQueueThreadPool{})
+    }
+
+    fn spawn<F>(&self, job: F)
+        where
+            F: FnOnce() + Send + 'static,
+    {
+    }
+}
+
+
+pub struct RayonThreadPool {}
+
+impl ThreadPool for RayonThreadPool {
+    fn new(threads: u32) -> Result<Self> where Self: Sized {
+        Ok(RayonThreadPool{})
+    }
+
+    fn spawn<F>(&self, job: F)
+        where
+            F: FnOnce() + Send + 'static,
+    {
     }
 }

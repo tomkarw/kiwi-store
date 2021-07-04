@@ -1,6 +1,6 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{Error, KvStore, KvsEngine, Result, SledKvsEngine};
+use kvs::{Error, KvStore, KvsEngine, Result, SledKvsEngine, NaiveThreadPool, ThreadPool};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -45,13 +45,13 @@ fn run(matches: &ArgMatches) -> Result<()> {
             if Path::new(DB_PATH).join("db").exists() {
                 return Err(Error::Other("sled database already exists".to_owned()));
             }
-            start_listening(&mut KvStore::open(DB_PATH)?, addr)
+            start_listening(KvStore::open(DB_PATH)?, addr)
         }
         "sled" => {
             if Path::new(DB_PATH).join("kvs.db").exists() {
                 return Err(Error::Other("kvs database already exists".to_owned()));
             }
-            start_listening(&mut SledKvsEngine::open(DB_PATH)?, addr)
+            start_listening(SledKvsEngine::open(DB_PATH)?, addr)
         }
         _ => {
             return Err(Error::Other(
@@ -63,16 +63,18 @@ fn run(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn start_listening<E: KvsEngine>(mut store: &mut E, addr: &str) -> Result<()> {
+fn start_listening<E: KvsEngine>(store: E, addr: &str) -> Result<()> {
     let listener = TcpListener::bind(addr)?;
+    let pool = NaiveThreadPool::new(0)?;
     for stream in listener.incoming() {
-        handle_connection(&mut store, stream?)?;
+        let store_clone = store.clone();
+        pool.spawn(|| handle_connection(store_clone, stream.unwrap()).unwrap());
     }
 
     Ok(())
 }
 
-fn handle_connection<E: KvsEngine>(store: &mut &mut E, mut stream: TcpStream) -> Result<()> {
+fn handle_connection<E: KvsEngine>(store: E, mut stream: TcpStream) -> Result<()> {
     let mut buffer = [0; 1024];
     // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
     stream.read(&mut buffer)?;
