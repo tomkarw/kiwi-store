@@ -1,41 +1,41 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use tempfile::TempDir;
 
-use kvs::{KvStore, KvsEngine, Result, SledKvsEngine};
+use kvs::{KvStore, KvsEngine, SledKvsEngine};
 
 // TODO(tkarwowski): randomize test
 // TODO(tkarwowski): create random keys and values of length between 1 and 100000 bytes
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("kvs_write", |b| {
         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-        let mut db = KvStore::open(temp_dir.path()).unwrap();
+        let db = KvStore::open(temp_dir.path()).unwrap();
         b.iter(|| {
             for i in 0..100 {
-                db.set(format!("key{}", i), format!("value{}", i));
+                let _ = db.set(format!("key{}", i), format!("value{}", i));
             }
         });
     });
 
     c.bench_function("sled_write", |b| {
         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-        let mut db = SledKvsEngine::open(temp_dir.path()).unwrap();
+        let db = SledKvsEngine::open(temp_dir.path()).unwrap();
         b.iter(|| {
             for i in 0..100 {
-                db.set(format!("key{}", i), format!("value{}", i));
+                let _ = db.set(format!("key{}", i), format!("value{}", i));
             }
         });
     });
 
     c.bench_function("kvs_read", |b| {
         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-        let mut db = KvStore::open(temp_dir.path()).unwrap();
+        let db = KvStore::open(temp_dir.path()).unwrap();
         for i in 0..100 {
-            db.set(format!("key{}", i), format!("value{}", i));
+            let _ = db.set(format!("key{}", i), format!("value{}", i));
         }
         b.iter(|| {
             for _ in 0..10 {
                 for i in 0..100 {
-                    db.get(format!("key{}", i));
+                    let _ = db.get(format!("key{}", i));
                 }
             }
         });
@@ -43,14 +43,14 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("sled_read", |b| {
         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-        let mut db = SledKvsEngine::open(temp_dir.path()).unwrap();
+        let db = SledKvsEngine::open(temp_dir.path()).unwrap();
         for i in 0..100 {
-            db.set(format!("key{}", i), format!("value{}", i));
+            let _ = db.set(format!("key{}", i), format!("value{}", i));
         }
         b.iter(|| {
             for _ in 0..10 {
                 for i in 0..100 {
-                    db.get(format!("key{}", i));
+                    let _ = db.get(format!("key{}", i));
                 }
             }
         });

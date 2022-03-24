@@ -1,11 +1,14 @@
 use std::thread;
-use crate::err::{Result, Error};
+
+use crate::err::{Result};
 
 pub trait ThreadPool {
     /// Creates a new thread pool, immediately spawning the specified number of threads.
     ///
     /// Returns an error if any thread fails to spawn. All previously-spawned threads are terminated.
-    fn new(threads: u32) -> Result<Self> where Self: Sized;
+    fn new(threads: u32) -> Result<Self>
+    where
+        Self: Sized;
     /// Spawn a function into the threadpool.
     ///
     /// Spawning always succeeds, but if the function panics the threadpool continues
@@ -19,8 +22,11 @@ pub trait ThreadPool {
 pub struct NaiveThreadPool {}
 
 impl ThreadPool for NaiveThreadPool {
-    fn new(threads: u32) -> Result<Self> where Self: Sized {
-        Ok(NaiveThreadPool{})
+    fn new(_threads: u32) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(NaiveThreadPool {})
     }
 
     fn spawn<F>(&self, job: F)
@@ -31,31 +37,41 @@ impl ThreadPool for NaiveThreadPool {
     }
 }
 
+// enum ThreadPoolMessage {
+//     RunJob(Box<dyn FnOnce() + Send + 'static>),
+//     Shutdown,
+// }
+
 pub struct SharedQueueThreadPool {}
 
 impl ThreadPool for SharedQueueThreadPool {
-    fn new(threads: u32) -> Result<Self> where Self: Sized {
-        Ok(SharedQueueThreadPool{})
+    fn new(_threads: u32) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(SharedQueueThreadPool {})
     }
 
-    fn spawn<F>(&self, job: F)
-        where
-            F: FnOnce() + Send + 'static,
+    fn spawn<F>(&self, _job: F)
+    where
+        F: FnOnce() + Send + 'static,
     {
     }
 }
 
-
 pub struct RayonThreadPool {}
 
 impl ThreadPool for RayonThreadPool {
-    fn new(threads: u32) -> Result<Self> where Self: Sized {
-        Ok(RayonThreadPool{})
+    fn new(_threads: u32) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(RayonThreadPool {})
     }
 
-    fn spawn<F>(&self, job: F)
-        where
-            F: FnOnce() + Send + 'static,
+    fn spawn<F>(&self, _job: F)
+    where
+        F: FnOnce() + Send + 'static,
     {
     }
 }

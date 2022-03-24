@@ -1,6 +1,6 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{Error, KvStore, KvsEngine, Result, SledKvsEngine, NaiveThreadPool, ThreadPool};
+use kvs::{Error, KvStore, KvsEngine, NaiveThreadPool, Result, SledKvsEngine, ThreadPool};
 use log::info;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -63,8 +63,8 @@ fn run(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn start_listening<E: KvsEngine>(store: E, addr: &str) -> Result<()> {
-    let listener = TcpListener::bind(addr)?;
+fn start_listening<E: KvsEngine>(store: E, address: &str) -> Result<()> {
+    let listener = TcpListener::bind(address)?;
     let pool = NaiveThreadPool::new(0)?;
     for stream in listener.incoming() {
         let store_clone = store.clone();

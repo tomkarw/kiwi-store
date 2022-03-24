@@ -6,6 +6,7 @@
 //! Nothing fancy, but should allow you to [KvStore::set], [KvStore::get] and [KvStore::remove]
 //! in a in-memory cache.
 // #![warn(missing_docs)]
+
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -36,6 +37,75 @@ pub struct KvStoreInner {
     write_log: File,
     full_path: PathBuf,
     store: HashMap<String, u64>,
+}
+
+impl KvStoreInner {
+    /// Set a value. Overrides the value if key is already present
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        let offset = self.write_log.seek(SeekFrom::End(0))?;
+
+        // trigger compaction if file is ~4000 entries long
+        if offset > 22 {
+            self.compact()?;
+        }
+
+        self.store.insert(key.clone(), offset);
+        let command = serde_json::to_string(&Command::Set((key, value))).unwrap();
+        self.write_log.write_all((command + "\n").as_bytes())?;
+        Ok(())
+    }
+
+    /// Get a value.
+    fn get(&self, key: String) -> Result<Option<String>> {
+        match self.store.get(&key) {
+            Some(offset) => Ok(Some(KvStore::value_from_file(&self.full_path, *offset)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Remove a value. If value wasn't present, nothing happens.
+    fn remove(&mut self, key: String) -> Result<()> {
+        match self.store.get(&key) {
+            Some(_) => {
+                self.store.remove(&key);
+                let command = serde_json::to_string(&Command::Remove(key)).unwrap();
+                self.write_log.write_all((command + "\n").as_bytes())?;
+                Ok(())
+            }
+            None => Err(Error::NoKey(String::from("Key not found"))),
+        }
+    }
+
+    fn compact(&mut self) -> Result<()> {
+        // open new file kvs.db.tmp
+        let path = self.full_path.clone();
+        let tmp_path = self.full_path.clone().with_extension(".tmp");
+
+        let mut new_log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&tmp_path)?;
+        let mut new_offset = 0u64;
+
+        // for each key in self.store
+        for (key, offset) in self.store.iter_mut() {
+            // save current value as Command::Set to the new file
+            let value = KvStore::value_from_file(&path, *offset)?;
+            let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
+            let offset_change = new_log.write((command + "\n").as_bytes())?;
+            // update key offset
+            *offset = new_offset;
+            new_offset += offset_change as u64;
+        }
+
+        // replace db file with the temporary one
+        fs::rename(&tmp_path, &path)?;
+
+        // update write_log file
+        self.write_log = OpenOptions::new().create(true).append(true).open(&path)?;
+
+        Ok(())
+    }
 }
 
 /// Provides a generic set of actions extracted from KvStore
@@ -115,7 +185,7 @@ impl KvStore {
         })
     }
 
-    fn value(path: &Path, offset: u64) -> Result<String> {
+    fn value_from_file(path: &Path, offset: u64) -> Result<String> {
         let mut file = File::open(path)?;
 
         file.seek(SeekFrom::Start(offset))?;
@@ -127,91 +197,60 @@ impl KvStore {
             Command::Set((_, value)) => Ok(value),
         }
     }
-
-    fn compact(&self) -> Result<()> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
-
-        // open new file kvs.db.tmp
-        let path = inner.full_path.clone();
-        let tmp_path = inner.full_path.clone().with_extension(".tmp");
-
-        let mut new_log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&tmp_path)?;
-        let mut new_offset = 0u64;
-
-        // for each key in self.store
-        for (key, offset) in inner.store.iter_mut() {
-            // save current value as Command::Set to the new file
-            let value = KvStore::value(&path, *offset)?;
-            let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
-            let offset_change = new_log.write((command + "\n").as_bytes())?;
-            // update key offset
-            *offset = new_offset;
-            new_offset += offset_change as u64;
-        }
-
-        // replace db file with the temporary one
-        fs::rename(&tmp_path, &path)?;
-
-        // update write_log file
-        inner.write_log = OpenOptions::new().create(true).append(true).open(&path)?;
-
-        Ok(())
-    }
 }
 
 impl KvsEngine for KvStore {
     /// Set a value. Overrides the value if key is already present
     fn set(&self, key: String, value: String) -> Result<()> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
-
-        let offset = inner.write_log.seek(SeekFrom::End(0))?;
-
-        // trigger compaction if file is ~4000 entries long
-        if offset > 4000 * 22 {
-            self.compact()?;
-        }
-
-        inner.store.insert(key.clone(), offset);
-        let command = serde_json::to_string(&Command::Set((key, value))).unwrap();
-        inner.write_log.write_all((command + "\n").as_bytes())?;
-        Ok(())
+        self.inner.lock().expect("error acquiring lock").set(key, value)
     }
 
     /// Get a value.
     fn get(&self, key: String) -> Result<Option<String>> {
-        let inner = self.inner.lock().expect("error acquiring lock");
-        match inner.store.get(&key) {
-            Some(offset) => Ok(Some(KvStore::value(&inner.full_path, *offset)?)),
-            None => Ok(None),
-        }
+        self.inner.lock().expect("error acquiring lock").get(key)
     }
 
     /// Remove a value. If value wasn't present, nothing happens.
     fn remove(&self, key: String) -> Result<()> {
-        let mut inner = self.inner.lock().expect("error acquiring lock");
-        match inner.store.get(&key) {
-            Some(_) => {
-                inner.store.remove(&key);
-                let command = serde_json::to_string(&Command::Remove(key)).unwrap();
-                inner.write_log.write_all((command + "\n").as_bytes())?;
-                Ok(())
-            }
-            None => Err(Error::NoKey(String::from("Key not found"))),
-        }
+        self.inner.lock().expect("error acquiring lock").remove(key)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct SledKvsEngine {
-    inner: Arc<Mutex<SledKvsEngineInner>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SledKvsEngineInner {
     db: Db,
+}
+
+impl SledKvsEngineInner {
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        match self.db.insert(key.as_bytes(), value.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+    fn get(&self, key: String) -> Result<Option<String>> {
+        match self.db.get(key.as_bytes()) {
+            Ok(result) => match result {
+                Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
+                None => Ok(None),
+            },
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+    fn remove(&mut self, key: String) -> Result<()> {
+        match self.db.remove(key.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Error::Sled(error)),
+        }
+    }
+
+}
+
+#[derive(Debug, Clone)]
+pub struct SledKvsEngine {
+    inner: Arc<Mutex<SledKvsEngineInner>>,
 }
 
 impl SledKvsEngine {
@@ -226,29 +265,14 @@ impl SledKvsEngine {
 
 impl KvsEngine for SledKvsEngine {
     fn set(&self, key: String, value: String) -> Result<()> {
-        let inner = self.inner.lock().expect("error acquiring lock");
-        match inner.db.insert(key.as_bytes(), value.as_bytes()) {
-            Ok(_) => Ok(()),
-            Err(error) => Err(Error::Sled(error)),
-        }
+        self.inner.lock().expect("error acquiring lock").set(key, value)
     }
 
     fn get(&self, key: String) -> Result<Option<String>> {
-        let inner = self.inner.lock().expect("error acquiring lock");
-        match inner.db.get(key.as_bytes()) {
-            Ok(result) => match result {
-                Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
-                None => Ok(None),
-            },
-            Err(error) => Err(Error::Sled(error)),
-        }
+        self.inner.lock().expect("error acquiring lock").get(key)
     }
 
     fn remove(&self, key: String) -> Result<()> {
-        let inner = self.inner.lock().expect("error acquiring lock");
-        match inner.db.remove(key.as_bytes()) {
-            Ok(_) => Ok(()),
-            Err(error) => Err(Error::Sled(error)),
-        }
+        self.inner.lock().expect("error acquiring lock").remove(key)
     }
 }
