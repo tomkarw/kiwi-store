@@ -1,6 +1,6 @@
 use std::thread;
 
-use crate::err::{Result};
+use crate::error::Result;
 
 pub trait ThreadPool {
     /// Creates a new thread pool, immediately spawning the specified number of threads.

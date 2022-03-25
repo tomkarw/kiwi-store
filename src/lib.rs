@@ -18,11 +18,11 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use sled::Db;
 
-pub use err::{Error, Result};
+pub use error::{Error, Result};
 pub use thread_pool::*;
 
 /// Reexport Result and Error
-mod err;
+mod error;
 /// Reexport ThreadPool and it's implementations
 pub mod thread_pool;
 
@@ -202,7 +202,10 @@ impl KvStore {
 impl KvsEngine for KvStore {
     /// Set a value. Overrides the value if key is already present
     fn set(&self, key: String, value: String) -> Result<()> {
-        self.inner.lock().expect("error acquiring lock").set(key, value)
+        self.inner
+            .lock()
+            .expect("error acquiring lock")
+            .set(key, value)
     }
 
     /// Get a value.
@@ -245,7 +248,6 @@ impl SledKvsEngineInner {
             Err(error) => Err(Error::Sled(error)),
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -265,7 +267,10 @@ impl SledKvsEngine {
 
 impl KvsEngine for SledKvsEngine {
     fn set(&self, key: String, value: String) -> Result<()> {
-        self.inner.lock().expect("error acquiring lock").set(key, value)
+        self.inner
+            .lock()
+            .expect("error acquiring lock")
+            .set(key, value)
     }
 
     fn get(&self, key: String) -> Result<Option<String>> {

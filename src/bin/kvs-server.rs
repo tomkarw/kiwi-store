@@ -1,15 +1,66 @@
 use clap::{load_yaml, App, ArgMatches};
-
-use kvs::{Error, KvStore, KvsEngine, NaiveThreadPool, Result, SledKvsEngine, ThreadPool};
-use log::info;
+use kiwi_proto::kiwi_store_server::{KiwiStore, KiwiStoreServer};
+use kiwi_proto::{GetReply, GetRequest};
+use kvs::Result as KvsResult;
+use kvs::{Error, KvStore, KvsEngine, NaiveThreadPool, SledKvsEngine, ThreadPool};
+use log::{debug, info};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
+use std::str::FromStr;
 use std::{env, fs, str};
+use tonic::transport::Server;
+use tonic::{Request, Response, Status};
+
+pub mod kiwi_proto {
+    tonic::include_proto!("kiwi_store");
+}
 
 static DB_PATH: &str = "./database";
 
-fn main() -> Result<()> {
+#[derive(Debug, Default)]
+pub struct Kvs<E>
+where
+    E: KvsEngine,
+{
+    engine: E,
+}
+
+impl<E> Kvs<E>
+    where
+    E: KvsEngine,
+{
+    fn new(engine: E) -> Self {
+        Kvs {
+           engine
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl<E> KiwiStore for Kvs<E>
+where
+    E: KvsEngine + std::marker::Sync,
+{
+    async fn get(&self, request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
+        debug!("got request: {:?}", &request);
+
+        let reply = GetReply {
+            // TODO: return option and don't unwrap here
+            value: self
+                .engine
+                .get(request.into_inner().key)
+                .unwrap()
+                .unwrap()
+                .into(),
+        };
+
+        Ok(Response::new(reply))
+    }
+}
+
+#[tokio::main]
+async fn main() -> KvsResult<()> {
     // set up logger
     stderrlog::new()
         .module(module_path!())
@@ -23,10 +74,10 @@ fn main() -> Result<()> {
     let yaml = load_yaml!("kvs-server.yaml");
     let matches = App::from(yaml).get_matches();
 
-    run(&matches)
+    run(&matches).await
 }
 
-fn run(matches: &ArgMatches) -> Result<()> {
+async fn run(matches: &ArgMatches) -> KvsResult<()> {
     let addr = matches.value_of("address").unwrap();
     let engine = matches.value_of("engine").unwrap();
 
@@ -45,73 +96,28 @@ fn run(matches: &ArgMatches) -> Result<()> {
             if Path::new(DB_PATH).join("db").exists() {
                 return Err(Error::Other("sled database already exists".to_owned()));
             }
-            start_listening(KvStore::open(DB_PATH)?, addr)
+            let kvs = Kvs::new(KvStore::open(DB_PATH)?);
+            Server::builder()
+                .add_service(KiwiStoreServer::new(kvs))
+                .serve(SocketAddr::from_str(addr)?)
+                .await?;
+            Ok(())
         }
         "sled" => {
             if Path::new(DB_PATH).join("kvs.db").exists() {
                 return Err(Error::Other("kvs database already exists".to_owned()));
             }
-            start_listening(SledKvsEngine::open(DB_PATH)?, addr)
+            let kvs = Kvs::new(SledKvsEngine::open(DB_PATH)?);
+            Server::builder()
+                .add_service(KiwiStoreServer::new(kvs))
+                .serve(SocketAddr::from_str(addr)?)
+                .await?;
+            Ok(())
         }
         _ => {
             return Err(Error::Other(
                 "unknown engine option, must be one of: kvs, sled".to_owned(),
             ))
         }
-    }?;
-
-    Ok(())
-}
-
-fn start_listening<E: KvsEngine>(store: E, address: &str) -> Result<()> {
-    let listener = TcpListener::bind(address)?;
-    let pool = NaiveThreadPool::new(0)?;
-    for stream in listener.incoming() {
-        let store_clone = store.clone();
-        pool.spawn(|| handle_connection(store_clone, stream.unwrap()).unwrap());
     }
-
-    Ok(())
-}
-
-fn handle_connection<E: KvsEngine>(store: E, mut stream: TcpStream) -> Result<()> {
-    let mut buffer = [0; 1024];
-    // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
-    stream.read(&mut buffer)?;
-    let buffer = str::from_utf8(&buffer).unwrap();
-
-    let mut buffer_iter = buffer.lines();
-    let verb = buffer_iter.next().expect("no input");
-
-    let response = if verb == "GET" {
-        let key = buffer_iter.next().expect("Key was not provided");
-        match store.get(key.to_owned()) {
-            Ok(result) => match result {
-                Some(value) => format!("OK {}\n", value),
-                None => String::from("EMPTY\n"),
-            },
-            Err(error) => format!("ERROR {}\n", error),
-        }
-    } else if verb == "SET" {
-        let key = buffer_iter.next().expect("Key was not provided");
-        let value = buffer_iter.next().expect("Value was not provided");
-        match store.set(key.to_owned(), value.to_owned()) {
-            Ok(()) => String::from("OK\n"),
-            Err(error) => format!("ERROR {}\n", error),
-        }
-    } else if verb == "RM" {
-        let key = buffer_iter.next().expect("Key was not provided");
-        match store.remove(key.to_owned()) {
-            Ok(()) => String::from("OK\n"),
-            Err(error) => format!("ERROR {}\n", error),
-        }
-    } else {
-        String::from("ERROR Unrecognised action verb\n")
-    };
-
-    info!("{}", response);
-    stream.write_all(response.as_bytes())?;
-    stream.flush()?;
-
-    Ok(())
 }

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::str;
 use std::{error, fmt, io, result};
+use std::net::AddrParseError;
 
 use serde::export::Formatter;
 
@@ -26,6 +27,10 @@ pub enum Error {
     Sled(sled::Error),
     /// Error while acquiring Mutex
     // PoisonError(sync::PoisonError<sync::MutexGuard<'a, KvStoreInner>>),
+    /// Error parsing string to socket address
+    AddrParseError(AddrParseError),
+    /// Error related to gRPC transport layer in Tonic
+    TransportError(tonic::transport::Error),
     /// Any ad hoc error
     Other(String),
 }
@@ -41,6 +46,8 @@ impl Display for Error {
             Error::Sled(msg) => write!(f, "{}", msg),
             // Error::PoisonError(msg) => write!(f, "{}", msg),
             Error::Other(msg) => write!(f, "{}", msg),
+            Error::AddrParseError(msg) => write!(f, "{}", msg),
+            Error::TransportError(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -71,8 +78,14 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
-// impl From<sync::PoisonError<sync::MutexGuard<KvStoreInner>>> for Error {
-//     fn from(err: sync::PoisonError<sync::MutexGuard<KvStoreInner>>) -> Self {
-//         Error::PoisonError(err)
-//     }
-// }
+impl From<AddrParseError> for Error {
+    fn from(err: AddrParseError) -> Self {
+        Error::AddrParseError(err)
+    }
+}
+
+impl From<tonic::transport::Error> for Error {
+    fn from(err: tonic::transport::Error) -> Self {
+        Error::TransportError(err)
+    }
+}

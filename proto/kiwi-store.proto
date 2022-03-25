@@ -1,0 +1,14 @@
+syntax = "proto3";
+package kiwi_store;
+
+service KiwiStore {
+  rpc Get (GetRequest) returns (GetReply);
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetReply {
+  string value = 1;
+}
