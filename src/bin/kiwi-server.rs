@@ -119,7 +119,8 @@ async fn main() -> KvsResult<()> {
 
 async fn run(address: &str, engine: &str) -> KvsResult<()> {
     info!(
-        "kvs-server v{} running at {}",
+        "{} v{} running at {}",
+        env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         address
     );
