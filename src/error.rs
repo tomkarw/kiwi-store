@@ -3,8 +3,6 @@ use std::net::AddrParseError;
 use std::str;
 use std::{error, fmt, io, result};
 
-use serde::export::Formatter;
-
 /// Result specific for this crate, for now it's error case is `Box<dyn Error>` but this might change
 // TODO(tkarwowski): might use https://docs.rs/fehler/1.0.0/fehler/ instead
 pub type Result<T> = result::Result<T, Error>;
@@ -36,7 +34,7 @@ pub enum Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::NoKey(msg) => write!(f, "{}", msg),
             Error::Offset(msg) => write!(f, "{}", msg),

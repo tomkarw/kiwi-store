@@ -1,5 +1,5 @@
 [package]
-name = "kvs"
+name = "kiwi-store"
 version = "0.1.0"
 authors = ["Tomek Karwowski <to.karwowski@gmail.com>"]
 description = "A key-value store"

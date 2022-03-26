@@ -1,7 +1,7 @@
 syntax = "proto3";
 package kiwi_store;
 
-service KiwiStore {
+service KiwiService {
   rpc Get (GetRequest) returns (GetReply);
   rpc Set (SetRequest) returns (SetReply);
   rpc Remove (RemoveRequest) returns (RemoveReply);

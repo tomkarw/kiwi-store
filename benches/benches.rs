@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use tempfile::TempDir;
 
-use kvs::{KvStore, KvsEngine, SledKvsEngine};
+use kiwi_store::{KvStore, KvsEngine, SledKvsEngine};
 
 // TODO(tkarwowski): randomize test
 // TODO(tkarwowski): create random keys and values of length between 1 and 100000 bytes

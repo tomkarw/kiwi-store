@@ -13,7 +13,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use sled::Db;
@@ -34,13 +34,13 @@ enum Command {
 }
 
 #[derive(Debug)]
-pub struct KvStoreInner {
+pub struct KiwiStoreInner {
     write_log: File,
     full_path: PathBuf,
     store: HashMap<String, u64>,
 }
 
-impl KvStoreInner {
+impl KiwiStoreInner {
     /// Set a value. Overrides the value if key is already present
     fn set(&mut self, key: String, value: String) -> Result<()> {
         let offset = self.write_log.seek(SeekFrom::End(0))?;
@@ -59,7 +59,7 @@ impl KvStoreInner {
     /// Get a value.
     fn get(&self, key: String) -> Result<Option<String>> {
         match self.store.get(&key) {
-            Some(offset) => Ok(Some(KvStore::value_from_file(&self.full_path, *offset)?)),
+            Some(offset) => Ok(Some(KiwiStore::value_from_file(&self.full_path, *offset)?)),
             None => Ok(None),
         }
     }
@@ -91,7 +91,7 @@ impl KvStoreInner {
         // for each key in self.store
         for (key, offset) in self.store.iter_mut() {
             // save current value as Command::Set to the new file
-            let value = KvStore::value_from_file(&path, *offset)?;
+            let value = KiwiStore::value_from_file(&path, *offset)?;
             let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
             let offset_change = new_log.write((command + "\n").as_bytes())?;
             // update key offset
@@ -110,7 +110,7 @@ impl KvStoreInner {
 }
 
 /// Provides a generic set of actions extracted from KvStore
-pub trait KvsEngine: Clone + Send + 'static {
+pub trait KiwiEngine: Clone + Send + 'static {
     fn set(&self, key: String, value: String) -> Result<()>;
     fn get(&self, key: String) -> Result<Option<String>>;
     fn remove(&self, key: String) -> Result<()>;
@@ -123,7 +123,7 @@ pub trait KvsEngine: Clone + Send + 'static {
 /// # use tempfile::TempDir;
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// # let some_dir = TempDir::new().unwrap();
-/// use kvs::{KvStore, KvsEngine};
+/// use kiwi_store::{KvStore, KvsEngine};
 /// let mut store = KvStore::open(some_dir.path())?;
 ///
 /// store.set("key1".to_owned(), "value1".to_owned());
@@ -135,11 +135,11 @@ pub trait KvsEngine: Clone + Send + 'static {
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-pub struct KvStore {
-    inner: Arc<RwLock<KvStoreInner>>,
+pub struct KiwiStore {
+    inner: Arc<RwLock<KiwiStoreInner>>,
 }
 
-impl KvStore {
+impl KiwiStore {
     /// Open KvStore at a specified location.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
         let mut full_path = path.into();
@@ -177,8 +177,8 @@ impl KvStore {
             .append(true)
             .open(&full_path)?;
 
-        Ok(KvStore {
-            inner: Arc::new(RwLock::new(KvStoreInner {
+        Ok(KiwiStore {
+            inner: Arc::new(RwLock::new(KiwiStoreInner {
                 write_log,
                 full_path,
                 store,
@@ -200,7 +200,7 @@ impl KvStore {
     }
 }
 
-impl KvsEngine for KvStore {
+impl KiwiEngine for KiwiStore {
     /// Set a value. Overrides the value if key is already present
     fn set(&self, key: String, value: String) -> Result<()> {
         self.inner
@@ -224,11 +224,11 @@ impl KvsEngine for KvStore {
 }
 
 #[derive(Debug, Clone)]
-pub struct SledKvsEngineInner {
+pub struct SledStoreInner {
     db: Db,
 }
 
-impl SledKvsEngineInner {
+impl SledStoreInner {
     fn set(&mut self, key: String, value: String) -> Result<()> {
         match self.db.insert(key.as_bytes(), value.as_bytes()) {
             Ok(_) => Ok(()),
@@ -255,33 +255,36 @@ impl SledKvsEngineInner {
 }
 
 #[derive(Debug, Clone)]
-pub struct SledKvsEngine {
-    inner: Arc<Mutex<SledKvsEngineInner>>,
+pub struct SledStore {
+    inner: Arc<RwLock<SledStoreInner>>,
 }
 
-impl SledKvsEngine {
+impl SledStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
-        Ok(SledKvsEngine {
-            inner: Arc::new(Mutex::new(SledKvsEngineInner {
+        Ok(SledStore {
+            inner: Arc::new(RwLock::new(SledStoreInner {
                 db: sled::open(path.into())?,
             })),
         })
     }
 }
 
-impl KvsEngine for SledKvsEngine {
+impl KiwiEngine for SledStore {
     fn set(&self, key: String, value: String) -> Result<()> {
         self.inner
-            .lock()
+            .write()
             .expect("error acquiring lock")
             .set(key, value)
     }
 
     fn get(&self, key: String) -> Result<Option<String>> {
-        self.inner.lock().expect("error acquiring lock").get(key)
+        self.inner.read().expect("error acquiring lock").get(key)
     }
 
     fn remove(&self, key: String) -> Result<()> {
-        self.inner.lock().expect("error acquiring lock").remove(key)
+        self.inner
+            .write()
+            .expect("error acquiring lock")
+            .remove(key)
     }
 }

@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use kvs::thread_pool::*;
-use kvs::Result;
+use kiwi_store::thread_pool::*;
+use kiwi_store::Result;
 
 use crossbeam_utils::sync::WaitGroup;
 

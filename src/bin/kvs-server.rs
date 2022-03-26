@@ -1,8 +1,8 @@
 use clap::{load_yaml, App, ArgMatches};
-use kiwi_proto::kiwi_store_server::{KiwiStore, KiwiStoreServer};
+use kiwi_proto::kiwi_service_server::{KiwiService, KiwiServiceServer};
 use kiwi_proto::{GetReply, GetRequest, RemoveReply, RemoveRequest, SetReply, SetRequest};
-use kvs::Result as KvsResult;
-use kvs::{Error, KvStore, KvsEngine, SledKvsEngine};
+use kiwi_store::Result as KvsResult;
+use kiwi_store::{Error, KiwiEngine, KiwiStore, SledStore};
 use log::{debug, info};
 
 use std::net::SocketAddr;
@@ -21,14 +21,14 @@ static DB_PATH: &str = "./database";
 #[derive(Debug, Default)]
 pub struct Kvs<E>
 where
-    E: KvsEngine,
+    E: KiwiEngine,
 {
     engine: E,
 }
 
 impl<E> Kvs<E>
 where
-    E: KvsEngine,
+    E: KiwiEngine,
 {
     fn new(engine: E) -> Self {
         Kvs { engine }
@@ -36,9 +36,9 @@ where
 }
 
 #[tonic::async_trait]
-impl<E> KiwiStore for Kvs<E>
+impl<E> KiwiService for Kvs<E>
 where
-    E: KvsEngine + std::marker::Sync,
+    E: KiwiEngine + std::marker::Sync,
 {
     async fn get(&self, request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
         debug!("got request: {:?}", &request);
@@ -122,9 +122,9 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
             if Path::new(DB_PATH).join("db").exists() {
                 return Err(Error::Other("sled database already exists".to_owned()));
             }
-            let kvs = Kvs::new(KvStore::open(DB_PATH)?);
+            let kvs = Kvs::new(KiwiStore::open(DB_PATH)?);
             Server::builder()
-                .add_service(KiwiStoreServer::new(kvs))
+                .add_service(KiwiServiceServer::new(kvs))
                 .serve(SocketAddr::from_str(addr)?)
                 .await?;
             Ok(())
@@ -133,9 +133,9 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
             if Path::new(DB_PATH).join("kvs.db").exists() {
                 return Err(Error::Other("kvs database already exists".to_owned()));
             }
-            let kvs = Kvs::new(SledKvsEngine::open(DB_PATH)?);
+            let kvs = Kvs::new(SledStore::open(DB_PATH)?);
             Server::builder()
-                .add_service(KiwiStoreServer::new(kvs))
+                .add_service(KiwiServiceServer::new(kvs))
                 .serve(SocketAddr::from_str(addr)?)
                 .await?;
             Ok(())

@@ -1,6 +1,6 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::{KvsEngine, Result};
+use kiwi_store::{KiwiEngine, KiwiStore, Result};
 use std::process;
 
 fn main() -> Result<()> {
@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 }
 
 pub fn run(matches: &ArgMatches) -> Result<()> {
-    let store = kvs::KvStore::open(".")?;
+    let store = KiwiStore::open(".")?;
 
     match matches.subcommand() {
         Some(("set", set_matches)) => {

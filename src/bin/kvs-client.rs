@@ -1,7 +1,7 @@
 use clap::{load_yaml, App, ArgMatches};
 
 use color_eyre::Result;
-use kiwi_proto::kiwi_store_client::KiwiStoreClient;
+use kiwi_proto::kiwi_service_client::KiwiServiceClient;
 use kiwi_proto::{GetReply, GetRequest, RemoveRequest, SetRequest};
 use std::process;
 
@@ -38,7 +38,7 @@ async fn run(matches: ArgMatches) -> Result<()> {
     let address = subcommand_matches.value_of("address").unwrap();
     let address = format!("http://{address}");
 
-    let mut client = KiwiStoreClient::connect(address).await?;
+    let mut client = KiwiServiceClient::connect(address).await?;
 
     match action {
         "get" => {
