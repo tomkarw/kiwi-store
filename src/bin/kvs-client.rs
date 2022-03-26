@@ -1,13 +1,16 @@
 use clap::{load_yaml, App, ArgMatches};
 
-use kvs::Result;
-// use log::info;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use color_eyre::Result;
+use kiwi_proto::kiwi_store_client::KiwiStoreClient;
+use kiwi_proto::{GetReply, GetRequest, SetRequest, RemoveRequest};
 use std::process;
-use std::str;
 
-fn main() -> Result<()> {
+pub mod kiwi_proto {
+    tonic::include_proto!("kiwi_store");
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     // set up logger
     stderrlog::new()
         .module(module_path!())
@@ -17,50 +20,63 @@ fn main() -> Result<()> {
         .init()
         .unwrap();
 
+    color_eyre::install()?;
+
     // set up argument parsing
     let yaml = load_yaml!("kvs-client.yaml");
     let matches = App::from(yaml).get_matches();
 
-    run(&matches)
+    run(matches).await
 }
 
-pub fn run(matches: &ArgMatches) -> Result<()> {
+async fn run(matches: ArgMatches) -> Result<()> {
     let (action, subcommand_matches) = matches.subcommand().unwrap_or_else(|| {
         println!("No such command");
         process::exit(1);
     });
 
     let address = subcommand_matches.value_of("address").unwrap();
-    let mut stream = TcpStream::connect(address)?;
+    let address = format!("http://{address}");
+
+    let mut client = KiwiStoreClient::connect(address).await?;
 
     match action {
         "get" => {
             let key = subcommand_matches.value_of("key").unwrap().to_owned();
-            stream.write_all(format!("GET\n{}\n", key).as_bytes())?;
-            stream.flush()?;
+            let request = tonic::Request::new(GetRequest { key });
+            let response = client.get(request).await.unwrap();
+            let GetReply {
+                key_found,
+                value
+            } = response.into_inner();
+            if key_found {
+                println!("{}", value);
+            } else {
+                println!("Key not found");
+            }
         }
         "set" => {
             let key = subcommand_matches.value_of("key").unwrap().to_owned();
             let value = subcommand_matches.value_of("value").unwrap().to_owned();
-            stream.write_all(format!("SET\n{}\n{}\n", key, value).as_bytes())?;
-            stream.flush()?;
+
+            let request = tonic::Request::new(SetRequest { key, value });
+            let _response = client.set(request).await;
         }
         "rm" => {
             let key = subcommand_matches.value_of("key").unwrap().to_owned();
-            stream.write_all(format!("RM\n{}\n", key).as_bytes())?;
-            stream.flush()?;
+
+            let request = tonic::Request::new(RemoveRequest { key });
+            let response = client.remove(request).await.unwrap();
+            if !response.into_inner().key_found {
+                eprintln!("Key not found");
+                process::exit(1);
+            }
         }
         _ => {
             println!("No such command");
             process::exit(1);
         }
-    }
-
-    let mut buffer = [0; 1024];
-    // TODO(clippy): read amount is not handled. Use `Read::read_exact` instead
-    stream.read(&mut buffer)?;
-    let buffer = str::from_utf8(&buffer).unwrap();
-    println!("{}", buffer);
+    };
 
     Ok(())
 }

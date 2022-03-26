@@ -1,11 +1,11 @@
 use clap::{load_yaml, App, ArgMatches};
 use kiwi_proto::kiwi_store_server::{KiwiStore, KiwiStoreServer};
-use kiwi_proto::{GetReply, GetRequest};
+use kiwi_proto::{GetReply, GetRequest, SetReply, SetRequest, RemoveReply, RemoveRequest};
 use kvs::Result as KvsResult;
-use kvs::{Error, KvStore, KvsEngine, NaiveThreadPool, SledKvsEngine, ThreadPool};
+use kvs::{Error, KvStore, KvsEngine, SledKvsEngine};
 use log::{debug, info};
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+
+use std::net::{SocketAddr};
 use std::path::Path;
 use std::str::FromStr;
 use std::{env, fs, str};
@@ -27,13 +27,11 @@ where
 }
 
 impl<E> Kvs<E>
-    where
+where
     E: KvsEngine,
 {
     fn new(engine: E) -> Self {
-        Kvs {
-           engine
-        }
+        Kvs { engine }
     }
 }
 
@@ -45,14 +43,45 @@ where
     async fn get(&self, request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
         debug!("got request: {:?}", &request);
 
-        let reply = GetReply {
-            // TODO: return option and don't unwrap here
-            value: self
-                .engine
-                .get(request.into_inner().key)
-                .unwrap()
-                .unwrap()
-                .into(),
+        let reply = match self
+            .engine
+            .get(request.into_inner().key)
+            .unwrap() {
+            Some(value) => GetReply {
+                key_found: true,
+                value
+            },
+            None => GetReply {
+                key_found: false,
+                value: String::default(),
+            }
+        };
+
+        Ok(Response::new(reply))
+    }
+
+    async fn set(&self, request: Request<SetRequest>) -> Result<Response<SetReply>, Status> {
+        debug!("got request: {:?}", &request);
+
+        let SetRequest { key, value } = request.into_inner();
+        debug!("{key}, {value}");
+
+        self.engine.set(key, value).unwrap();
+
+        let reply = SetReply {};
+
+        Ok(Response::new(reply))
+    }
+
+    async fn remove(
+        &self,
+        request: Request<RemoveRequest>,
+    ) -> Result<Response<RemoveReply>, Status> {
+        debug!("got request: {:?}", &request);
+
+        let reply = match self.engine.remove(request.into_inner().key) {
+            Ok(()) => RemoveReply { key_found: true },
+            Err(_) => RemoveReply { key_found: false },
         };
 
         Ok(Response::new(reply))
@@ -115,7 +144,7 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
             Ok(())
         }
         _ => {
-            return Err(Error::Other(
+            Err(Error::Other(
                 "unknown engine option, must be one of: kvs, sled".to_owned(),
             ))
         }

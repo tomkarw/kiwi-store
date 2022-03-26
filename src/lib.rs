@@ -45,7 +45,7 @@ impl KvStoreInner {
         let offset = self.write_log.seek(SeekFrom::End(0))?;
 
         // trigger compaction if file is ~4000 entries long
-        if offset > 22 {
+        if offset > 4000 * 21 {
             self.compact()?;
         }
 

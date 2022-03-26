@@ -1,7 +1,7 @@
 use std::fmt::Display;
+use std::net::AddrParseError;
 use std::str;
 use std::{error, fmt, io, result};
-use std::net::AddrParseError;
 
 use serde::export::Formatter;
 
