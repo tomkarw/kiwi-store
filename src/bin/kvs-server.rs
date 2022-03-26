@@ -1,11 +1,11 @@
 use clap::{load_yaml, App, ArgMatches};
 use kiwi_proto::kiwi_store_server::{KiwiStore, KiwiStoreServer};
-use kiwi_proto::{GetReply, GetRequest, SetReply, SetRequest, RemoveReply, RemoveRequest};
+use kiwi_proto::{GetReply, GetRequest, RemoveReply, RemoveRequest, SetReply, SetRequest};
 use kvs::Result as KvsResult;
 use kvs::{Error, KvStore, KvsEngine, SledKvsEngine};
 use log::{debug, info};
 
-use std::net::{SocketAddr};
+use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 use std::{env, fs, str};
@@ -43,18 +43,15 @@ where
     async fn get(&self, request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
         debug!("got request: {:?}", &request);
 
-        let reply = match self
-            .engine
-            .get(request.into_inner().key)
-            .unwrap() {
+        let reply = match self.engine.get(request.into_inner().key).unwrap() {
             Some(value) => GetReply {
                 key_found: true,
-                value
+                value,
             },
             None => GetReply {
                 key_found: false,
                 value: String::default(),
-            }
+            },
         };
 
         Ok(Response::new(reply))
@@ -143,10 +140,8 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
                 .await?;
             Ok(())
         }
-        _ => {
-            Err(Error::Other(
-                "unknown engine option, must be one of: kvs, sled".to_owned(),
-            ))
-        }
+        _ => Err(Error::Other(
+            "unknown engine option, must be one of: kvs, sled".to_owned(),
+        )),
     }
 }

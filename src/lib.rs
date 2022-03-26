@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use sled::Db;
+use std::sync::RwLock;
 
 pub use error::{Error, Result};
 pub use thread_pool::*;
@@ -135,7 +136,7 @@ pub trait KvsEngine: Clone + Send + 'static {
 /// ```
 #[derive(Debug, Clone)]
 pub struct KvStore {
-    inner: Arc<Mutex<KvStoreInner>>,
+    inner: Arc<RwLock<KvStoreInner>>,
 }
 
 impl KvStore {
@@ -177,7 +178,7 @@ impl KvStore {
             .open(&full_path)?;
 
         Ok(KvStore {
-            inner: Arc::new(Mutex::new(KvStoreInner {
+            inner: Arc::new(RwLock::new(KvStoreInner {
                 write_log,
                 full_path,
                 store,
@@ -203,19 +204,22 @@ impl KvsEngine for KvStore {
     /// Set a value. Overrides the value if key is already present
     fn set(&self, key: String, value: String) -> Result<()> {
         self.inner
-            .lock()
+            .write()
             .expect("error acquiring lock")
             .set(key, value)
     }
 
     /// Get a value.
     fn get(&self, key: String) -> Result<Option<String>> {
-        self.inner.lock().expect("error acquiring lock").get(key)
+        self.inner.read().expect("error acquiring lock").get(key)
     }
 
     /// Remove a value. If value wasn't present, nothing happens.
     fn remove(&self, key: String) -> Result<()> {
-        self.inner.lock().expect("error acquiring lock").remove(key)
+        self.inner
+            .write()
+            .expect("error acquiring lock")
+            .remove(key)
     }
 }
 

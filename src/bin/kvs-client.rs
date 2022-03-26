@@ -2,7 +2,7 @@ use clap::{load_yaml, App, ArgMatches};
 
 use color_eyre::Result;
 use kiwi_proto::kiwi_store_client::KiwiStoreClient;
-use kiwi_proto::{GetReply, GetRequest, SetRequest, RemoveRequest};
+use kiwi_proto::{GetReply, GetRequest, RemoveRequest, SetRequest};
 use std::process;
 
 pub mod kiwi_proto {
@@ -45,10 +45,7 @@ async fn run(matches: ArgMatches) -> Result<()> {
             let key = subcommand_matches.value_of("key").unwrap().to_owned();
             let request = tonic::Request::new(GetRequest { key });
             let response = client.get(request).await.unwrap();
-            let GetReply {
-                key_found,
-                value
-            } = response.into_inner();
+            let GetReply { key_found, value } = response.into_inner();
             if key_found {
                 println!("{}", value);
             } else {
