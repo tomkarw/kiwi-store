@@ -1,11 +1,34 @@
-use clap::{load_yaml, App, ArgMatches};
+use clap::{arg, ArgMatches, Command};
 
 use kiwi_store::{KiwiEngine, KiwiStore, Result};
 use std::process;
 
 fn main() -> Result<()> {
-    let yaml = load_yaml!("cli.yaml");
-    let matches = App::from(yaml).get_matches();
+    let matches = Command::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("set")
+                .about("Set value for key.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(<VALUE>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .subcommand(
+            Command::new("get")
+                .about("Get value for key.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .subcommand(
+            Command::new("rm")
+                .about("Remove key and value.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .get_matches();
 
     run(&matches)
 }

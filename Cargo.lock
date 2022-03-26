@@ -209,35 +209,17 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.0-beta.2"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bd1061998a501ee7d4b6d449020df3266ca3124b941ec56cf2005c3779ca142"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive",
  "indexmap",
- "lazy_static",
  "os_str_bytes",
  "strsim",
  "termcolor",
- "textwrap 0.12.1",
- "unicode-width",
- "vec_map",
- "yaml-rust",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.0.0-beta.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "370f715b81112975b1b69db93e0b56ea4cd4e5002ac43b2da8474106a54096a1"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
@@ -733,7 +715,7 @@ name = "kiwi-store"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
- "clap 3.0.0-beta.2",
+ "clap 3.1.6",
  "color-eyre",
  "criterion",
  "crossbeam-utils 0.6.6",
@@ -764,12 +746,6 @@ name = "libc"
 version = "0.2.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efaa7b300f3b5fe8eb6bf21ce3895e1751d9665086af2d64b42f19701015ff4f"
-
-[[package]]
-name = "linked-hash-map"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dd5a6d5999d9907cda8ed67bbd137d3af8085216c2ac62de5be860bd41f304a"
 
 [[package]]
 name = "lock_api"
@@ -910,9 +886,12 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "os_str_bytes"
-version = "2.4.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afb2e1c3ee07430c2cf76151675e583e0f19985fa6efae47d6848a3e2c824f85"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "owo-colors"
@@ -1060,30 +1039,6 @@ checksum = "aee95d988ee893cb35c06b148c80ed2cd52c8eea927f50ba7a0be1a786aeab73"
 dependencies = [
  "predicates-core",
  "treeline",
-]
-
-[[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
 ]
 
 [[package]]
@@ -1501,11 +1456,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.61"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fceb2595057b6891a4ee808f70054bd2d12f0e97f1cbb78689b59f676df325a"
+checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
- "itoa 0.4.7",
+ "itoa 1.0.1",
  "ryu",
  "serde",
 ]
@@ -1621,12 +1576,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.12.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "203008d98caf094106cfaba70acfed15e18ed3ddb7d94e49baec153a2b462789"
-dependencies = [
- "unicode-width",
-]
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thread_local"
@@ -1912,18 +1864,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
-
-[[package]]
-name = "version_check"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
-
-[[package]]
 name = "walkdir"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2067,12 +2007,3 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "yaml-rust"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39f0c922f1a334134dc2f7a8b67dc5d25f0735263feec974345ff706bcf20b0d"
-dependencies = [
- "linked-hash-map",
-]

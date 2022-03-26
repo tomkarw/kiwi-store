@@ -1,4 +1,4 @@
-use clap::{load_yaml, App, ArgMatches};
+use clap::{arg, Command};
 use kiwi_proto::kiwi_service_server::{KiwiService, KiwiServiceServer};
 use kiwi_proto::{GetReply, GetRequest, RemoveReply, RemoveRequest, SetReply, SetRequest};
 use kiwi_store::Result as KvsResult;
@@ -97,20 +97,31 @@ async fn main() -> KvsResult<()> {
         .unwrap();
 
     // set up argument parsing
-    let yaml = load_yaml!("kvs-server.yaml");
-    let matches = App::from(yaml).get_matches();
+    let matches = Command::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .arg(
+            arg!(-a --addr <ADDRESS> "IP address, either v4 or v6 in format 'IP:PORT'.")
+                .required(false)
+                .default_value("127.0.0.1:4000"),
+        )
+        .arg(
+            arg!(-e --engine <ENGINE> "Engine used for backend, either 'kvs' or 'sled'.")
+                .required(false)
+                .default_value("kvs"),
+        )
+        .get_matches();
 
-    run(&matches).await
+    let addr = matches.value_of("addr").unwrap();
+    let engine = matches.value_of("engine").unwrap();
+    run(addr, engine).await
 }
 
-async fn run(matches: &ArgMatches) -> KvsResult<()> {
-    let addr = matches.value_of("address").unwrap();
-    let engine = matches.value_of("engine").unwrap();
-
+async fn run(address: &str, engine: &str) -> KvsResult<()> {
     info!(
         "kvs-server v{} running at {}",
         env!("CARGO_PKG_VERSION"),
-        addr
+        address
     );
 
     if !Path::new(DB_PATH).exists() {
@@ -125,7 +136,7 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
             let kvs = Kvs::new(KiwiStore::open(DB_PATH)?);
             Server::builder()
                 .add_service(KiwiServiceServer::new(kvs))
-                .serve(SocketAddr::from_str(addr)?)
+                .serve(SocketAddr::from_str(address)?)
                 .await?;
             Ok(())
         }
@@ -136,7 +147,7 @@ async fn run(matches: &ArgMatches) -> KvsResult<()> {
             let kvs = Kvs::new(SledStore::open(DB_PATH)?);
             Server::builder()
                 .add_service(KiwiServiceServer::new(kvs))
-                .serve(SocketAddr::from_str(addr)?)
+                .serve(SocketAddr::from_str(address)?)
                 .await?;
             Ok(())
         }

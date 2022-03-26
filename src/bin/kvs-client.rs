@@ -1,4 +1,4 @@
-use clap::{load_yaml, App, ArgMatches};
+use clap::{arg, ArgMatches, Command};
 
 use color_eyre::Result;
 use kiwi_proto::kiwi_service_client::KiwiServiceClient;
@@ -23,8 +23,31 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
 
     // set up argument parsing
-    let yaml = load_yaml!("kvs-client.yaml");
-    let matches = App::from(yaml).get_matches();
+    let matches = Command::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("set")
+                .about("Set value for key.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(<VALUE>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .subcommand(
+            Command::new("get")
+                .about("Get value for key.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .subcommand(
+            Command::new("rm")
+                .about("Remove key and value.")
+                .arg(arg!(<KEY>))
+                .arg(arg!(-a --addr <ADDRESS> "IP address either v4 or v6 in format 'IP:PORT'")),
+        )
+        .get_matches();
 
     run(matches).await
 }
@@ -35,14 +58,14 @@ async fn run(matches: ArgMatches) -> Result<()> {
         process::exit(1);
     });
 
-    let address = subcommand_matches.value_of("address").unwrap();
+    let address = subcommand_matches.value_of("addr").unwrap();
     let address = format!("http://{address}");
 
     let mut client = KiwiServiceClient::connect(address).await?;
 
     match action {
         "get" => {
-            let key = subcommand_matches.value_of("key").unwrap().to_owned();
+            let key = subcommand_matches.value_of("KEY").unwrap().to_owned();
             let request = tonic::Request::new(GetRequest { key });
             let response = client.get(request).await.unwrap();
             let GetReply { key_found, value } = response.into_inner();
@@ -53,14 +76,14 @@ async fn run(matches: ArgMatches) -> Result<()> {
             }
         }
         "set" => {
-            let key = subcommand_matches.value_of("key").unwrap().to_owned();
-            let value = subcommand_matches.value_of("value").unwrap().to_owned();
+            let key = subcommand_matches.value_of("KEY").unwrap().to_owned();
+            let value = subcommand_matches.value_of("VALUE").unwrap().to_owned();
 
             let request = tonic::Request::new(SetRequest { key, value });
             let _response = client.set(request).await;
         }
         "rm" => {
-            let key = subcommand_matches.value_of("key").unwrap().to_owned();
+            let key = subcommand_matches.value_of("KEY").unwrap().to_owned();
 
             let request = tonic::Request::new(RemoveRequest { key });
             let response = client.remove(request).await.unwrap();
