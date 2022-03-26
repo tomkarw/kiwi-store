@@ -1,4 +1,7 @@
-use std::thread;
+use crossbeam_channel::Sender;
+use log::error;
+use std::panic::AssertUnwindSafe;
+use std::{panic, thread};
 
 use crate::error::Result;
 
@@ -37,25 +40,35 @@ impl ThreadPool for NaiveThreadPool {
     }
 }
 
-// enum ThreadPoolMessage {
-//     RunJob(Box<dyn FnOnce() + Send + 'static>),
-//     Shutdown,
-// }
-
-pub struct SharedQueueThreadPool {}
+pub struct SharedQueueThreadPool {
+    queue: Sender<Box<dyn FnOnce() + Send + 'static>>,
+}
 
 impl ThreadPool for SharedQueueThreadPool {
-    fn new(_threads: u32) -> Result<Self>
+    fn new(threads: u32) -> Result<Self>
     where
         Self: Sized,
     {
-        Ok(SharedQueueThreadPool {})
+        let (sender, receiver) =
+            crossbeam_channel::unbounded::<Box<dyn FnOnce() + Send + 'static>>();
+        for _ in 0..threads {
+            let receiver = receiver.clone();
+            thread::spawn(move || {
+                for job in receiver.iter() {
+                    if let Err(error) = panic::catch_unwind(AssertUnwindSafe(job)) {
+                        error!("thread worker panicked with: {:?}", error);
+                    }
+                }
+            });
+        }
+        Ok(SharedQueueThreadPool { queue: sender })
     }
 
-    fn spawn<F>(&self, _job: F)
+    fn spawn<F>(&self, job: F)
     where
         F: FnOnce() + Send + 'static,
     {
+        self.queue.send(Box::new(job)).unwrap();
     }
 }
 
