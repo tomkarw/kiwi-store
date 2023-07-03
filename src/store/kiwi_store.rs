@@ -92,8 +92,8 @@ impl KiwiStoreInner {
 /// # use tempfile::TempDir;
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// # let some_dir = TempDir::new().unwrap();
-/// use kiwi_store::{KvStore, KvsEngine};
-/// let mut store = KvStore::open(some_dir.path())?;
+/// use kiwi_store::{KiwiStore, KiwiEngine};
+/// let mut store = KiwiStore::open(some_dir.path())?;
 ///
 /// store.set("key1".to_owned(), "value1".to_owned());
 /// assert_eq!(Some("value1".to_owned()), store.get("key1".to_owned())?);

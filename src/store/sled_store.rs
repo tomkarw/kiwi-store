@@ -21,7 +21,7 @@ impl SledStoreInner {
     fn get(&self, key: String) -> Result<Option<String>> {
         match self.db.get(key.as_bytes()) {
             Ok(result) => match result {
-                Some(value) => Ok(Some(str::from_utf8(&value.to_vec())?.to_owned())),
+                Some(value) => Ok(Some(str::from_utf8(&value)?.to_owned())),
                 None => Ok(None),
             },
             Err(error) => Err(Error::Sled(error)),

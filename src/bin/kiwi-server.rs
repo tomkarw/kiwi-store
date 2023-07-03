@@ -92,7 +92,7 @@ async fn main() -> KvsResult<()> {
         .module(module_path!())
         .quiet(false)
         .verbosity(5)
-        .timestamp(stderrlog::Timestamp::Off)
+        .timestamp(stderrlog::Timestamp::Second)
         .init()
         .unwrap();
 

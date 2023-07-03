@@ -12,9 +12,9 @@ pub trait ThreadPool {
     fn new(threads: u32) -> Result<Self>
     where
         Self: Sized;
-    /// Spawn a function into the threadpool.
+    /// Spawn a function into the thread pool.
     ///
-    /// Spawning always succeeds, but if the function panics the threadpool continues
+    /// Spawning always succeeds, but if the function panics the thread pool continues
     /// to operate with the same number of threads — the thread count is not reduced
     /// nor is the thread pool destroyed, corrupted or invalidated.
     fn spawn<F>(&self, job: F)
@@ -72,19 +72,26 @@ impl ThreadPool for SharedQueueThreadPool {
     }
 }
 
-pub struct RayonThreadPool {}
+pub struct RayonThreadPool {
+    pool: rayon::ThreadPool,
+}
 
 impl ThreadPool for RayonThreadPool {
-    fn new(_threads: u32) -> Result<Self>
+    fn new(threads: u32) -> Result<Self>
     where
         Self: Sized,
     {
-        Ok(RayonThreadPool {})
+        Ok(RayonThreadPool {
+            pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(threads as usize)
+                .build()?,
+        })
     }
 
-    fn spawn<F>(&self, _job: F)
+    fn spawn<F>(&self, job: F)
     where
         F: FnOnce() + Send + 'static,
     {
+        self.pool.spawn(job)
     }
 }

@@ -4,8 +4,8 @@ mod sled_store;
 use crate::Result;
 use serde::{Deserialize, Serialize};
 
-pub use kiwi_store::KiwiStore;
-pub use sled_store::SledStore;
+pub use self::kiwi_store::KiwiStore;
+pub use self::sled_store::SledStore;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 enum Command {

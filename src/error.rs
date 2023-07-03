@@ -29,6 +29,8 @@ pub enum Error {
     AddrParseError(AddrParseError),
     /// Error related to gRPC transport layer in Tonic
     TransportError(tonic::transport::Error),
+    /// Error instantiating rayon thread pool
+    ThreadPoolBuild(rayon::ThreadPoolBuildError),
     /// Any ad hoc error
     Other(String),
 }
@@ -46,6 +48,7 @@ impl Display for Error {
             Error::Other(msg) => write!(f, "{}", msg),
             Error::AddrParseError(msg) => write!(f, "{}", msg),
             Error::TransportError(msg) => write!(f, "{}", msg),
+            Error::ThreadPoolBuild(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -85,5 +88,11 @@ impl From<AddrParseError> for Error {
 impl From<tonic::transport::Error> for Error {
     fn from(err: tonic::transport::Error) -> Self {
         Error::TransportError(err)
+    }
+}
+
+impl From<rayon::ThreadPoolBuildError> for Error {
+    fn from(err: rayon::ThreadPoolBuildError) -> Self {
+        Error::ThreadPoolBuild(err)
     }
 }
