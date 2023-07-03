@@ -79,7 +79,7 @@ impl KiwiStoreInner {
     /// Get a value.
     fn get(&self, key: String) -> Result<Option<String>> {
         match self.store.get(&key) {
-            Some(offset) => Ok(Some(KiwiStore::value_from_file(&self.full_path, *offset)?)),
+            Some(offset) => Ok(Some(value_from_file(&self.full_path, *offset)?)),
             None => Ok(None),
         }
     }
@@ -111,7 +111,7 @@ impl KiwiStoreInner {
         // for each key in self.store
         for (key, offset) in self.store.iter_mut() {
             // save current value as Command::Set to the new file
-            let value = KiwiStore::value_from_file(&path, *offset)?;
+            let value = value_from_file(&path, *offset)?;
             let command = serde_json::to_string(&Command::Set((key.clone(), value)))?;
             let offset_change = new_log.write((command + "\n").as_bytes())?;
             // update key offset
@@ -158,19 +158,6 @@ impl KiwiStore {
             inner: Arc::new(RwLock::new(KiwiStoreInner::open(path)?)),
         })
     }
-
-    fn value_from_file(path: &Path, offset: u64) -> Result<String> {
-        let mut file = File::open(path)?;
-
-        file.seek(SeekFrom::Start(offset))?;
-        let mut reader = BufReader::new(&file);
-        let mut buffer = String::new();
-        reader.read_line(&mut buffer)?;
-        match serde_json::from_str(&buffer)? {
-            Command::Remove(_) => panic!("wrong offset"),
-            Command::Set((_, value)) => Ok(value),
-        }
-    }
 }
 
 impl KiwiEngine for KiwiStore {
@@ -193,5 +180,18 @@ impl KiwiEngine for KiwiStore {
             .write()
             .expect("error acquiring lock")
             .remove(key)
+    }
+}
+
+fn value_from_file(path: &Path, offset: u64) -> Result<String> {
+    let mut file = File::open(path)?;
+
+    file.seek(SeekFrom::Start(offset))?;
+    let mut reader = BufReader::new(&file);
+    let mut buffer = String::new();
+    reader.read_line(&mut buffer)?;
+    match serde_json::from_str(&buffer)? {
+        Command::Remove(_) => panic!("wrong offset"),
+        Command::Set((_, value)) => Ok(value),
     }
 }
