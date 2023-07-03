@@ -17,6 +17,50 @@ pub struct KiwiStoreInner {
 }
 
 impl KiwiStoreInner {
+    /// Open KvStore at a specified location.
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
+        let mut full_path = path.into();
+        full_path.push("kvs.db");
+
+        let mut store = HashMap::new();
+        if full_path.exists() {
+            let file = File::open(&full_path)?;
+            let mut reader = BufReader::new(file);
+            let mut buffer = String::new();
+            let mut current_offset = 0;
+
+            loop {
+                let read_bytes = reader.read_line(&mut buffer)?;
+                if read_bytes == 0 {
+                    break; // end of stream
+                }
+
+                match serde_json::from_str(&buffer)? {
+                    Command::Set((key, _)) => {
+                        store.insert(key, current_offset as u64);
+                    }
+                    Command::Remove(key) => {
+                        store.remove(&key);
+                    }
+                };
+
+                buffer.clear();
+                current_offset += read_bytes;
+            }
+        }
+
+        let write_log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&full_path)?;
+
+        Ok(KiwiStoreInner {
+            write_log,
+            full_path,
+            store,
+        })
+    }
+
     /// Set a value. Overrides the value if key is already present
     fn set(&mut self, key: String, value: String) -> Result<()> {
         let offset = self.write_log.seek(SeekFrom::End(0))?;
@@ -109,49 +153,9 @@ pub struct KiwiStore {
 }
 
 impl KiwiStore {
-    /// Open KvStore at a specified location.
     pub fn open(path: impl Into<PathBuf>) -> Result<Self> {
-        let mut full_path = path.into();
-        full_path.push("kvs.db");
-
-        let mut store = HashMap::new();
-        if full_path.exists() {
-            let file = File::open(&full_path)?;
-            let mut reader = BufReader::new(file);
-            let mut buffer = String::new();
-            let mut current_offset = 0;
-
-            loop {
-                let read_bytes = reader.read_line(&mut buffer)?;
-                if read_bytes == 0 {
-                    break; // end of stream
-                }
-
-                match serde_json::from_str(&buffer)? {
-                    Command::Set((key, _)) => {
-                        store.insert(key, current_offset as u64);
-                    }
-                    Command::Remove(key) => {
-                        store.remove(&key);
-                    }
-                };
-
-                buffer.clear();
-                current_offset += read_bytes;
-            }
-        }
-
-        let write_log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&full_path)?;
-
         Ok(KiwiStore {
-            inner: Arc::new(RwLock::new(KiwiStoreInner {
-                write_log,
-                full_path,
-                store,
-            })),
+            inner: Arc::new(RwLock::new(KiwiStoreInner::open(path)?)),
         })
     }
 
